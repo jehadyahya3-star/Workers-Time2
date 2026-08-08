@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "projects": {
+      "title": "Projects",
+      "description": "Construction projects list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "managerName": { "type": "string" },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
+        "code": { "type": "string" },
+        "budget": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "reports": {
+      "title": "Work Reports",
+      "description": "Daily and hourly equipment work reports",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "reportNumber": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "diesel": {
+      "title": "Diesel Transactions",
+      "description": "Fuel log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "equipment": {
+      "title": "Equipment List",
+      "description": "Machinery list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "companies": {
+      "title": "Companies",
+      "description": "Client companies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "drivers": {
+      "title": "Drivers",
+      "description": "Drivers list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    }
+  }
+}

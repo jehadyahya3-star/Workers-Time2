@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>🚜 نظام إدارة المعدات ومشاريع المقاولات - شيول 966</title>
+    <meta name="title" content="نظام إدارة المعدات والمشاريع" />
+    <meta name="description" content="نظام متكامل لإدارة المعدات والمشاريع وحركة الديزل والتقارير اليومية وتتبع الأعمال" />
+    <meta name="application-name" content="نظام إدارة المعدات والمشاريع" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="إدارة المعدات" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=966" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png?v=966" />
+    <link rel="shortcut icon" href="/favicon.ico?v=966" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=966" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) { console.log('SW Registered:', reg.scope); })
+            .catch(function(err) { console.log('SW Reg Fail:', err); });
+        });
+      }
+    </script>
+  </head>
+  <body class="bg-slate-50 text-slate-800 font-['Cairo',sans-serif] antialiased selection:bg-amber-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,6 @@
+{
+  "name": "نظام إدارة المعدات والمخزون - Equipment & Inventory System",
+  "description": "نظام متكامل لإدارة المعدات الثقيلة، عقود العمل، ساعات التشغيل، مخزن الديزل، التكاليف التشغيلية، والتقارير مع التصدير لـ PDF و Excel والرسوم البيانية.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

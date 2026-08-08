@@ -1,11 +1,63 @@
-<div align="center">
+# دليل بناء وتحديث تطبيق أندرويد (Android Deployment & Build Guide)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+هذا المستند يوضح كيفية بناء تطبيق **نظام إدارة المعدات والمشاريع** أوتوماتيكياً واستخراج ملفات العرض المحدثة لاستخدامها في **Android Studio** وتحديث تطبيق الأندرويد.
 
-  <h1>Built with AI Studio</h2>
+---
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🚀 التشغيل والسكربت الأوتوماتيكي (تحديث بنقرة واحدة)
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+تم إعداد سكربت تلقائي يعمل على إنجاز العملية بالكامل تلقائياً:
+1. بناء مشروع الويب وتوليد مجلد المخرجات `dist/`.
+2. تنظيف وإعداد مجلد أصول أندرويد المستهدف: `android/app/src/main/assets/public/`.
+3. نسخ كافة الملفات من `dist/` إلى `android/app/src/main/assets/public/` تلقائياً.
 
-</div>
+### ⚙️ أمر التشغيل الفوري:
+
+في موجه الأوامر (Terminal)، قم بتشغيل الأمر التالي:
+
+```bash
+npm run build:android
+```
+
+أو:
+
+```bash
+npm run sync:android
+```
+
+---
+
+## 🛠️ الخطوات اليدوية (في حال أردت تنفيذ العملية خطوة بخطوة)
+
+إذا أردت تنفيذ العملية يدوياً دون السكربت الأوتوماتيكي:
+
+1. **بناء مشروع الويب:**
+   ```bash
+   npm run build
+   ```
+
+2. **نسخ المحتويات:**
+   قم بنسخ كافة محتويات مجلد `dist/` الناتجة عن البناء.
+
+3. **استبدال الملفات في أندرويد ستوديو:**
+   ضع الملفات المنسوخة داخل المسار التالي في مشروع أندرويد:
+   ```text
+   android/app/src/main/assets/public/
+   ```
+   *(تأكد من الموافقة على استبدال الملفات القديمة بالكامل).*
+
+---
+
+## 📱 بناء حزمة أندرويد APK في Android Studio
+
+1. افتح مجلد `android` باستخدام **Android Studio**.
+2. انتظر حتى ينتهي Android Studio من مزامنة مشروع **Gradle** (Sync Project with Gradle Files).
+3. من القائمة العلوية، اختر:
+   **Build > Build Bundle(s) / APK(s) > Build APK(s)**
+4. بعد اكتمال البناء، ستظهر لك رسالة تأكيد تتضمن رابط فتح المجلد المحتوي على ملف **app-debug.apk** أو **app-release.apk** جاهزاً للتثبيت أو التوزيع على فرق العمل.
+
+---
+
+## 💡 ملاحظات هامة
+- عند تحديث أي كود أو واجهة في التطبيق مستقبلاً، ما عليك سوى تنفيذ `npm run build:android` ثم إعادة بناء الـ APK في Android Studio مباشرة.
+- الملفات داخل `assets/public` تُعتبر الملفات الفعلية المضمّنة داخل تطبيق الأندرويد للعمل أوفلاين وسرعة الاستجابة.
