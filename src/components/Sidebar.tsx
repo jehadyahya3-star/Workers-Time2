@@ -8,79 +8,104 @@ import {
   Users, 
   PlusCircle,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Receipt
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { Loader966Icon } from './Loader966Icon';
+import { UserAccount } from '../utils/auth';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   reportsCount: number;
   lowStockAlert: boolean;
+  currentUserAccount?: UserAccount;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   reportsCount,
-  lowStockAlert
+  lowStockAlert,
+  currentUserAccount
 }) => {
   const { t } = useLanguage();
 
-  const menuItems = [
+  const isSubUser = currentUserAccount && !currentUserAccount.isPrimaryUser && currentUserAccount.role !== 'primary_admin' && currentUserAccount.role !== 'admin';
+  const perms = currentUserAccount?.permissions;
+
+  const rawMenuItems = [
     {
       id: 'dashboard',
       label: t('nav.dashboard', 'لوحة التحكم والإحصائيات'),
       icon: LayoutDashboard,
-      badge: null
+      badge: null,
+      visible: true
     },
     {
       id: 'new-report',
       label: t('nav.newReport', 'تسجيل يوم عمل جديد'),
       icon: PlusCircle,
       badge: null,
-      highlight: true
+      highlight: true,
+      visible: !isSubUser || perms?.canAddReports !== false
+    },
+    {
+      id: 'invoicing',
+      label: t('nav.invoicing', 'إصدار الفواتير والمطالبات'),
+      icon: Receipt,
+      badge: 'متاح',
+      badgeColor: 'bg-amber-500/20 text-amber-600 dark:text-amber-400',
+      visible: !isSubUser || perms?.canIssueInvoicing !== false
     },
     {
       id: 'reports-list',
       label: t('nav.reports', 'سجلات وتقارير العمل'),
       icon: FileText,
-      badge: reportsCount > 0 ? reportsCount : null
+      badge: reportsCount > 0 ? reportsCount : null,
+      visible: true
     },
     {
       id: 'diesel-warehouse',
       label: t('nav.diesel', 'مخزن وتوريد الديزل'),
       icon: Fuel,
       badge: lowStockAlert ? 'تنبيه' : null,
-      badgeColor: lowStockAlert ? 'bg-rose-500 text-white' : 'bg-amber-500/20 text-amber-600'
+      badgeColor: lowStockAlert ? 'bg-rose-500 text-white' : 'bg-amber-500/20 text-amber-600',
+      visible: !isSubUser || perms?.canManageDiesel !== false
     },
     {
       id: 'fuel-analysis',
       label: t('nav.fuelAnalysis', 'تحليل استهلاك الوقود'),
       icon: TrendingUp,
       badge: 'جديد',
-      badgeColor: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+      badgeColor: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400',
+      visible: !isSubUser || perms?.canManageDiesel !== false
     },
     {
       id: 'equipment-manager',
       label: t('nav.equipment', 'إدارة المعدات والعقود'),
       icon: HardHat,
-      badge: null
+      badge: null,
+      visible: !isSubUser || perms?.canManageEquipment !== false
     },
     {
       id: 'companies-accounts',
       label: t('nav.companies', 'كشوفات الحسابات والشركات'),
       icon: Building2,
-      badge: null
+      badge: null,
+      visible: !isSubUser || perms?.canManageCompanies !== false
     },
     {
       id: 'drivers-manager',
       label: t('nav.drivers', 'إدارة السائقين والسُلف'),
       icon: Users,
-      badge: null
+      badge: null,
+      visible: !isSubUser || perms?.canManageDrivers !== false
     }
   ];
+
+  const menuItems = rawMenuItems.filter(item => item.visible);
 
   return (
     <aside className="bg-white border-b lg:border-b-0 lg:ltr:border-r lg:rtl:border-l border-slate-200 lg:w-64 flex-shrink-0 no-print flex flex-col justify-between">

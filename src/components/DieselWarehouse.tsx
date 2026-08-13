@@ -21,7 +21,13 @@ import {
   RotateCcw,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Zap,
+  Sparkles,
+  Plus,
+  ChevronUp,
+  Layers,
+  Wrench
 } from 'lucide-react';
 
 export type DieselSortField = 
@@ -161,6 +167,50 @@ export const DieselWarehouse: React.FC<DieselWarehouseProps> = ({
     selectedEquipmentFilter !== 'all' || 
     selectedDriverFilter !== 'all';
 
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
+
+  const generateAutoVoucher = (type: 'receive' | 'consume' = modalType) => {
+    const prefix = type === 'receive' ? 'REC' : 'FUEL';
+    const dateCode = new Date().toISOString().slice(2, 10).replace(/-/g, '');
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const code = `${prefix}-${dateCode}-${randomNum}`;
+    setVoucherNumber(code);
+  };
+
+  const handleOpenQuickModal = (type: 'receive' | 'consume' = 'consume') => {
+    setModalType(type);
+    generateAutoVoucher(type);
+    setInvoiceNumber('');
+    setDeliveryDriverName('');
+    if (type === 'receive') {
+      setQuantityLiters(1000);
+    } else {
+      setQuantityLiters(150);
+      if (equipmentList.length > 0) {
+        setEquipmentName(equipmentList[0].name);
+        if (equipmentList[0].driverName) {
+          setDriverName(equipmentList[0].driverName);
+        }
+      }
+    }
+    setShowModal(true);
+  };
+
+  const handleSelectEquipmentQuick = (eq: Equipment) => {
+    setEquipmentName(eq.name);
+    if (eq.driverName) {
+      setDriverName(eq.driverName);
+    }
+  };
+
+  const handleAddNoteTag = (tag: string) => {
+    if (!notes) {
+      setNotes(tag);
+    } else if (!notes.includes(tag)) {
+      setNotes(`${notes} - ${tag}`);
+    }
+  };
+
   const handleOpenModal = (type: 'receive' | 'consume') => {
     setModalType(type);
     setVoucherNumber('');
@@ -170,6 +220,12 @@ export const DieselWarehouse: React.FC<DieselWarehouseProps> = ({
       setQuantityLiters(1000);
     } else {
       setQuantityLiters(150);
+      if (equipmentList.length > 0) {
+        setEquipmentName(equipmentList[0].name);
+        if (equipmentList[0].driverName) {
+          setDriverName(equipmentList[0].driverName);
+        }
+      }
     }
     setShowModal(true);
   };
@@ -751,45 +807,213 @@ export const DieselWarehouse: React.FC<DieselWarehouseProps> = ({
         </div>
       </div>
 
-      {/* Transaction Modal (Receive or Consume) */}
+      {/* Floating Action Button (FAB) for Mobile & Fast Fueling */}
+      <div className="fixed bottom-6 left-6 z-40 flex flex-col items-end gap-3 no-print">
+        {/* FAB Quick Action Menu */}
+        {fabMenuOpen && (
+          <div className="flex flex-col gap-2 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-700 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 min-w-60 dir-rtl text-right">
+            <div className="text-[11px] font-black text-amber-400 pb-2 border-b border-slate-800 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>عمليات الوقود السريعة</span>
+              </span>
+              <button 
+                onClick={() => setFabMenuOpen(false)} 
+                className="text-slate-400 hover:text-white p-0.5 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setFabMenuOpen(false);
+                handleOpenQuickModal('consume');
+              }}
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <div className="bg-slate-950/20 p-1.5 rounded-lg">
+                  <Fuel className="w-4 h-4 text-slate-950" />
+                </div>
+                <div className="text-right">
+                  <span className="block leading-tight font-extrabold">تعبئة وقود سريعة</span>
+                  <span className="text-[10px] text-slate-900/80 font-bold block">صرف ديزل فوري للمعدة</span>
+                </div>
+              </div>
+              <ArrowUpRight className="w-4 h-4 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => {
+                setFabMenuOpen(false);
+                handleOpenQuickModal('receive');
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 font-bold p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-all active:scale-95 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <div className="bg-emerald-500/20 p-1.5 rounded-lg">
+                  <PlusCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-right">
+                  <span className="block leading-tight text-white font-extrabold">سند شحنة واردة</span>
+                  <span className="text-[10px] text-emerald-400/80 font-bold block">تفريغ بوزة / ناقلة في الخزان</span>
+                </div>
+              </div>
+              <ArrowDownRight className="w-4 h-4 shrink-0" />
+            </button>
+          </div>
+        )}
+
+        {/* Main Floating Action Button (FAB) */}
+        <button
+          onClick={() => handleOpenQuickModal('consume')}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setFabMenuOpen(prev => !prev);
+          }}
+          className="group relative bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-4 py-3.5 rounded-full shadow-2xl border-2 border-amber-200 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-4 ring-amber-500/30"
+          title="تعبئة ديزل سريعة (انقر للفتح، انقر بالزر الأيمن الخيارات)"
+        >
+          <div className="relative flex items-center justify-center">
+            <Fuel className="w-6 h-6 stroke-[2.5] text-slate-950 group-hover:rotate-12 transition-transform" />
+            <Zap className="w-3.5 h-3.5 text-slate-950 absolute -top-1 -right-1 fill-amber-300" />
+          </div>
+          <span className="text-xs font-black tracking-tight whitespace-nowrap hidden sm:inline-block">
+            تعبئة وقود سريعة +
+          </span>
+          <span className="sm:hidden text-xs font-black tracking-tight">
+            تعبئة +
+          </span>
+        </button>
+      </div>
+
+      {/* Transaction Modal (Quick Mobile-Optimized Refueling Modal) */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto dir-rtl">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl relative my-auto border border-slate-200">
             
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                <Fuel className="w-5 h-5 text-amber-500" />
-                <span>{modalType === 'receive' ? 'تسجيل شحنة ديزل واردة' : 'تسجيل تعبئة ديزل لمعدة'}</span>
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-amber-500/10 p-2 rounded-xl text-amber-600 border border-amber-500/20">
+                  <Fuel className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base leading-tight">
+                    {modalType === 'receive' ? 'تسجيل شحنة ديزل واردة' : 'نموذج تعبئة وقود سريع للمعدة'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-semibold">
+                    {modalType === 'receive' ? 'تفريغ الوقود الوارد في خزان المحطة/المشروع' : 'صرف ديزل مباشر مع تعيين الكمية والمعدة برقم سند'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowModal(false)} 
+                className="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Segmented Mode Switcher Inside Modal */}
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-2xl text-xs font-black">
+              <button
+                type="button"
+                onClick={() => setModalType('consume')}
+                className={`py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  modalType === 'consume'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                <span>صرف وتعبئة لمعدة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalType('receive')}
+                className={`py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  modalType === 'receive'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>استلام شحنة واردة</span>
+              </button>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              
+              {/* Quick Equipment Selector Chips (for Consume mode) */}
+              {modalType === 'consume' && equipmentList.length > 0 && (
+                <div className="space-y-1.5 bg-amber-50/50 p-3 rounded-2xl border border-amber-200/80">
+                  <div className="flex items-center justify-between text-[11px] font-black text-amber-900">
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-amber-600" />
+                      <span>اختيار سريع للمعدة المستفيدة:</span>
+                    </span>
+                    <span className="text-[10px] text-amber-700 font-normal">انقر للاختيار والتعبئة</span>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar scroll-smooth">
+                    {equipmentList.map(eq => {
+                      const isSelected = equipmentName === eq.name;
+                      return (
+                        <button
+                          key={eq.id}
+                          type="button"
+                          onClick={() => handleSelectEquipmentQuick(eq)}
+                          className={`px-3 py-2 rounded-xl border text-xs font-extrabold whitespace-nowrap shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-105'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-100/50'
+                          }`}
+                        >
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-slate-950 shrink-0" />}
+                          <span>{eq.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Date & Voucher Number Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">التاريخ:</label>
+                  <label className="font-bold text-slate-700 block mb-1">تاريخ الحركة:</label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-amber-500"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
-                    <FileText className={`w-3.5 h-3.5 ${modalType === 'receive' ? 'text-emerald-600' : 'text-amber-600'}`} />
-                    <span>{modalType === 'receive' ? 'رقم سند الاستلام / الصرف المخزني اليدوي:' : 'رقم سند الصرف اليدوي:'}</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1">
+                      <FileText className={`w-3.5 h-3.5 ${modalType === 'receive' ? 'text-emerald-600' : 'text-amber-600'}`} />
+                      <span>رقم السند اليدوي:</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => generateAutoVoucher(modalType)}
+                      className="text-[10px] bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 font-extrabold px-2 py-0.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Zap className="w-3 h-3 text-amber-600" />
+                      <span>توليد تلقائي</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={voucherNumber}
                     onChange={(e) => setVoucherNumber(e.target.value)}
                     placeholder={modalType === 'receive' ? 'مثال: REC-901' : 'مثال: PAY-104'}
-                    className={`w-full border rounded-xl p-2 font-bold text-slate-900 ${
+                    className={`w-full border rounded-xl p-2.5 font-bold text-slate-900 ${
                       modalType === 'receive' 
                         ? 'bg-emerald-50/50 border-emerald-300 focus:ring-2 focus:ring-emerald-400' 
                         : 'bg-amber-50/50 border-amber-300 focus:ring-2 focus:ring-amber-400'
@@ -798,6 +1022,7 @@ export const DieselWarehouse: React.FC<DieselWarehouseProps> = ({
                 </div>
               </div>
 
+              {/* Invoice Number if Receive */}
               {modalType === 'receive' && (
                 <div>
                   <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
@@ -809,148 +1034,209 @@ export const DieselWarehouse: React.FC<DieselWarehouseProps> = ({
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                     placeholder="مثال: INV-88214"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-900"
                   />
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">الكمية (لتر):</label>
-                  <input
-                    type="number"
-                    value={quantityLiters}
-                    onChange={(e) => setQuantityLiters(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-sm"
-                    required
-                  />
+              {/* Quantity Liters with Quick Presets */}
+              <div className="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="font-extrabold text-slate-800 text-xs">
+                    كمية الوقود (باللتر):
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    المجموع: <strong className="text-amber-600">{quantityLiters} لتر</strong>
+                  </span>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">سعر اللتر ({currencySymbol}):</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={pricePerLiter}
-                    onChange={(e) => setPricePerLiter(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                    required
-                  />
+                {/* Quick Presets Buttons */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {[50, 100, 150, 200, 250, 300].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setQuantityLiters(preset)}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        quantityLiters === preset
+                          ? 'bg-slate-900 text-amber-400 border-slate-900 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset === 300 ? '300L (فل)' : `${preset}L`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="font-bold text-slate-600 block mb-1 text-[11px]">الكمية يدوياً (لتر):</label>
+                    <input
+                      type="number"
+                      value={quantityLiters}
+                      onChange={(e) => setQuantityLiters(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white border border-slate-300 rounded-xl p-2 font-black text-sm text-slate-900"
+                      required
+                      min="1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-600 block mb-1 text-[11px]">سعر اللتر ({currencySymbol}):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={pricePerLiter}
+                      onChange={(e) => setPricePerLiter(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white border border-slate-300 rounded-xl p-2 font-black text-slate-900"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Receive specific inputs vs Consume inputs */}
               {modalType === 'receive' ? (
                 <div className="space-y-3">
                   <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-emerald-900 text-xs font-semibold flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>الجهة المستلمة دائماً: <strong>مخزن المشروع الرئيسي</strong> (يتم تفريغ الاستلام في خزان المخزن ثم الصرف للمعدات).</span>
+                    <span>الجهة المستلمة دائماً: <strong>مخزن المشروع الرئيسي</strong>.</span>
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">وارد من (الجهة الموردة / الشركة / المحطة):</label>
+                    <label className="font-bold text-slate-700 block mb-1">وارد من (الجهة الموردة / المحطة):</label>
                     <input
                       type="text"
                       value={supplierOrSource}
                       onChange={(e) => setSupplierOrSource(e.target.value)}
                       placeholder="مثال: شركة النفط - محطة السهل"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
                       required
                     />
                   </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
-                      <Truck className="w-3.5 h-3.5 text-blue-600" />
-                      <span>اسم سائق الناقلة (الذي وصل الديزل للمشروع):</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={deliveryDriverName}
-                      onChange={(e) => setDeliveryDriverName(e.target.value)}
-                      placeholder="مثال: سالم أحمد (سائق الوايت / الناقلة)"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>سائق الناقلة:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={deliveryDriverName}
+                        onChange={(e) => setDeliveryDriverName(e.target.value)}
+                        placeholder="مثال: سالم أحمد"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
-                      <User className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>اسم مستلم الشحنة (أمين / مدير المخزن):</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={storekeeperName}
-                      onChange={(e) => setStorekeeperName(e.target.value)}
-                      placeholder="مثال: علي السقاف (أمين المخزن)"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                      required
-                    />
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>مستلم الشحنة بالمشروع:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={storekeeperName}
+                        onChange={(e) => setStorekeeperName(e.target.value)}
+                        placeholder="مثال: علي السقاف"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-amber-900 text-xs font-semibold flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>الجهة الصادرة: <strong>صرف مباشر من مخزن الوقود الرئيسي للمشروع</strong>.</span>
-                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">المعدة المستفيدة:</label>
+                      <select
+                        value={equipmentName}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setEquipmentName(name);
+                          const matched = equipmentList.find(eq => eq.name === name);
+                          if (matched && matched.driverName) {
+                            setDriverName(matched.driverName);
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold cursor-pointer text-slate-900"
+                      >
+                        {equipmentList.map((eq) => (
+                          <option key={eq.id} value={eq.name}>{eq.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">المعدة المستفيدة من التعبئة:</label>
-                    <select
-                      value={equipmentName}
-                      onChange={(e) => setEquipmentName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold cursor-pointer"
-                    >
-                      {equipmentList.map((eq) => (
-                        <option key={eq.id} value={eq.name}>{eq.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">السائق / المشغل المستلم للمعدة:</label>
-                    <select
-                      value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold cursor-pointer"
-                    >
-                      {driversList.map((dr) => (
-                        <option key={dr.id} value={dr.name}>{dr.name}</option>
-                      ))}
-                    </select>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">السائق / المشغل:</label>
+                      <select
+                        value={driverName}
+                        onChange={(e) => setDriverName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold cursor-pointer text-slate-900"
+                      >
+                        {driversList.map((dr) => (
+                          <option key={dr.id} value={dr.name}>{dr.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">ملاحظات الحركة:</label>
+              {/* Notes & Quick Note Tag Chips */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 block">ملاحظات الحركة:</label>
+                  <div className="flex gap-1">
+                    {['بداية الوردية', 'تعبئة فل', 'وردية طوارئ'].map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleAddNoteTag(tag)}
+                        className="text-[10px] font-bold bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 px-2 py-0.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                      >
+                        +{tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold"
-                  placeholder="ملاحظات إضافية بخصوص سند الصرف أو الاستلام..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-semibold text-slate-900"
+                  placeholder="ملاحظات إضافية بخصوص التعبئة أو سند الصرف..."
                 />
               </div>
 
-              <div className="bg-slate-900 text-white p-3 rounded-xl flex justify-between font-bold">
-                <span>التكلفة الإجمالية:</span>
-                <span className="text-amber-400">{(quantityLiters * pricePerLiter).toFixed(2)} {currencySymbol}</span>
+              {/* Total Cost Display */}
+              <div className="bg-slate-950 text-white p-3.5 rounded-2xl flex items-center justify-between font-black border border-slate-800 shadow-md">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs text-slate-300">التكلفة الإجمالية للحركة:</span>
+                </div>
+                <span className="text-amber-400 text-base">
+                  {(quantityLiters * pricePerLiter).toFixed(2)} {currencySymbol}
+                </span>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Form Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border rounded-xl font-bold cursor-pointer"
+                  className="px-4 py-2.5 border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-bold transition-colors cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2 rounded-xl cursor-pointer"
+                  className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-6 py-2.5 rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                 >
-                  حفظ الحركة والسند
+                  <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                  <span>حفظ حركة التعبئة فوراً</span>
                 </button>
               </div>
             </form>

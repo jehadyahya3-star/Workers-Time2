@@ -13,7 +13,7 @@ export default defineConfig(() => {
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'recharts', 'motion', 'lucide-react'],
+      include: ['recharts', 'motion', 'lucide-react'],
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',

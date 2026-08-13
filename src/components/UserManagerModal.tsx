@@ -20,10 +20,14 @@ import {
   Shield,
   Eye,
   Building2,
-  HardHat
+  HardHat,
+  FileText,
+  Fuel,
+  Receipt,
+  Download
 } from 'lucide-react';
 import { Project } from '../types';
-import { UserAccount, saveUserAccount, deleteUserAccount, registerUserAccount } from '../utils/auth';
+import { UserAccount, UserPermissions, saveUserAccount, deleteUserAccount, registerUserAccount, DEFAULT_FULL_PERMISSIONS } from '../utils/auth';
 
 interface UserManagerModalProps {
   isOpen: boolean;
@@ -32,6 +36,7 @@ interface UserManagerModalProps {
   allUsers: UserAccount[];
   onRefreshUsers: () => void;
   currentUser?: string;
+  currentUserAccount?: UserAccount;
 }
 
 export const UserManagerModal: React.FC<UserManagerModalProps> = ({
@@ -40,7 +45,8 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
   allProjects,
   allUsers,
   onRefreshUsers,
-  currentUser
+  currentUser,
+  currentUserAccount
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
@@ -51,14 +57,35 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'admin' | 'project_manager' | 'site_engineer' | 'viewer'>('site_engineer');
+  const [role, setRole] = useState<'primary_admin' | 'admin' | 'project_manager' | 'site_engineer' | 'accountant' | 'viewer'>('site_engineer');
   const [isAllProjectsAllowed, setIsAllProjectsAllowed] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  
+  // Granular Permissions
+  const [permissions, setPermissions] = useState<UserPermissions>({
+    canAddReports: true,
+    canDeleteReports: false,
+    canManageEquipment: true,
+    canManageCompanies: false,
+    canManageDiesel: true,
+    canIssueInvoicing: false,
+    canManageDrivers: true,
+    canManageUsers: false,
+    canExportData: true
+  });
 
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   if (!isOpen) return null;
+
+  const currentUserId = currentUserAccount?.id || 'admin-jehad';
+
+  // Filter users created by this primary user (or all if root admin)
+  const myCreatedUsers = allUsers.filter(u => {
+    if (currentUserId === 'admin-jehad') return true;
+    return u.id === currentUserId || u.createdByUserId === currentUserId;
+  });
 
   const handleOpenAdd = () => {
     setEditingUser(null);
@@ -70,6 +97,17 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
     setRole('site_engineer');
     setIsAllProjectsAllowed(false);
     setSelectedProjectIds(allProjects.length > 0 ? [allProjects[0].id] : []);
+    setPermissions({
+      canAddReports: true,
+      canDeleteReports: false,
+      canManageEquipment: true,
+      canManageCompanies: false,
+      canManageDiesel: true,
+      canIssueInvoicing: false,
+      canManageDrivers: true,
+      canManageUsers: false,
+      canExportData: true
+    });
     setShowAddForm(true);
     setFeedback(null);
   };
@@ -82,8 +120,9 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
     setEmail(user.email);
     setPhone(user.phone || '');
     setRole(user.role || 'site_engineer');
-    setIsAllProjectsAllowed(user.isAllProjectsAllowed || user.role === 'admin');
+    setIsAllProjectsAllowed(user.isAllProjectsAllowed || user.role === 'admin' || user.role === 'primary_admin');
     setSelectedProjectIds(user.assignedProjectIds || []);
+    setPermissions(user.permissions || DEFAULT_FULL_PERMISSIONS);
     setShowAddForm(true);
     setFeedback(null);
   };
@@ -94,6 +133,10 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
     } else {
       setSelectedProjectIds([...selectedProjectIds, projectId]);
     }
+  };
+
+  const togglePermission = (key: keyof UserPermissions) => {
+    setPermissions(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSaveUser = (e: React.FormEvent) => {
@@ -125,27 +168,30 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
         passwordHash: password.trim(),
         phone: phone.trim(),
         role: role,
-        isAllProjectsAllowed: isAllProjectsAllowed || role === 'admin',
-        assignedProjectIds: isAllProjectsAllowed || role === 'admin' ? [] : selectedProjectIds
+        isAllProjectsAllowed: isAllProjectsAllowed || role === 'admin' || role === 'primary_admin',
+        assignedProjectIds: isAllProjectsAllowed || role === 'admin' || role === 'primary_admin' ? [] : selectedProjectIds,
+        permissions: permissions
       };
       saveUserAccount(updatedUser);
       setFeedback({ type: 'success', message: 'تم تحديث بيانات المستخدم وصلاحيات المشاريع بنجاح!' });
     } else {
-      // Register new
+      // Register new sub-user created by this primary user
       const res = registerUserAccount(
         cleanEmail,
         username.trim(),
         name.trim() || username.trim(),
         password.trim(),
         role,
-        isAllProjectsAllowed || role === 'admin' ? [] : selectedProjectIds,
-        isAllProjectsAllowed || role === 'admin'
+        isAllProjectsAllowed || role === 'admin' || role === 'primary_admin' ? [] : selectedProjectIds,
+        isAllProjectsAllowed || role === 'admin' || role === 'primary_admin',
+        currentUserId,
+        permissions
       );
       if (!res.success) {
         setFeedback({ type: 'error', message: res.message || 'خطأ أثناء إنشاء الحساب' });
         return;
       }
-      setFeedback({ type: 'success', message: 'تم إضافة المستخدم الجديد ومنحه صلاحيات المشروع بنجاح!' });
+      setFeedback({ type: 'success', message: 'تم إضافة المستخدم الجديد بجدول مشاريعك ومنحه الصلاحيات المحددة بنجاح!' });
     }
 
     onRefreshUsers();
@@ -168,7 +214,7 @@ export const UserManagerModal: React.FC<UserManagerModalProps> = ({
 
   const handleCopyCredentials = (user: UserAccount) => {
     const appUrl = window.location.href;
-    const permittedProjNames = user.isAllProjectsAllowed || user.role === 'admin'
+    const permittedProjNames = user.isAllProjectsAllowed || user.role === 'admin' || user.role === 'primary_admin'
       ? 'جميع المشاريع بالنظام'
       : allProjects
           .filter(p => (user.assignedProjectIds || []).includes(p.id))
@@ -209,13 +255,13 @@ ${permittedProjNames}
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                <span>إدارة المستخدمين وصلاحيات الوصول للمشاريع</span>
+                <span>إدارة مستخدمي مشاريعك والصلاحيات</span>
                 <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                  {allUsers.length} مستخدم
+                  {myCreatedUsers.length} مستخدم
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                تحديد اسم المستخدم، كلمة السر، وتقييد الدخول لمشاريع محددة فقط
+                تأطير الوصول وإنشاء حسابات فرعية لمهندسي وسائقي ومحاسبي مشاريعك ومنحهم صلاحيات مخصصة
               </p>
             </div>
           </div>
@@ -247,7 +293,7 @@ ${permittedProjNames}
           {!showAddForm && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
               <div className="text-xs text-slate-300 font-medium">
-                ⚡ يمكنك إضافة مستخدمين، تحديد كلمة المرور، وتفعيل الصلاحية لمشاريع معينة ومنعهم من البقية.
+                ⚡ بصفتك مستخدماً رئيسياً، يمكنك إنشاء مستخدمين في مشاريعه وتحديد كلمة المرور والصلاحيات الممنوحة لهم بالصفحات.
               </div>
               <button
                 type="button"
@@ -255,7 +301,7 @@ ${permittedProjNames}
                 className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>إضافة مستخدم جديد وتحديد الصلاحيات</span>
+                <span>إضافة مستخدم جديد وتخصيص الصلاحيات</span>
               </button>
             </div>
           )}
@@ -266,7 +312,7 @@ ${permittedProjNames}
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <h3 className="text-sm font-black text-amber-400 flex items-center gap-2">
                   <UserPlus className="w-4 h-4" />
-                  <span>{editingUser ? `تعديل صلاحيات المستخدم (${editingUser.name})` : 'إضافة حساب مستخدم جديد بالنظام'}</span>
+                  <span>{editingUser ? `تعديل صلاحيات المستخدم (${editingUser.name})` : 'إضافة حساب مستخدم جديد بمشاريعك'}</span>
                 </h3>
                 <button
                   type="button"
@@ -354,24 +400,74 @@ ${permittedProjNames}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
                     <Shield className="w-3.5 h-3.5 text-amber-400" />
-                    <span>مستوى الصلاحية (Role):</span>
+                    <span>الدور ووظيفة الحساب (Role):</span>
                   </label>
                   <select
                     value={role}
                     onChange={(e: any) => {
                       const newRole = e.target.value;
                       setRole(newRole);
-                      if (newRole === 'admin') {
+                      if (newRole === 'primary_admin' || newRole === 'admin') {
                         setIsAllProjectsAllowed(true);
                       }
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:border-amber-500 focus:outline-none"
                   >
-                    <option value="site_engineer">مهندس موقع / سائق (يقوم بإدخال التقارير)</option>
-                    <option value="project_manager">مدير مشروع (تحكم كامل بالمشروع المخصص)</option>
-                    <option value="admin">مسؤول عام / مدقق (وصول لجميع المشاريع والنظام)</option>
-                    <option value="viewer">مشاهد فقط (عرض بدون تعديل)</option>
+                    <option value="site_engineer">مهندس موقع / سائق (إدخال تقارير العمل)</option>
+                    <option value="accountant">محاسب ماليات / فواتير (إدارة الحسابات والفواتير)</option>
+                    <option value="project_manager">مدير مشروع (إدارة كاملة للمشروع المخصص)</option>
+                    <option value="viewer">مشاهد ومراقب فقط (بدون إمكانية الإضافة أو التعديل)</option>
                   </select>
+                </div>
+              </div>
+
+              {/* GRANULAR PERMISSIONS SECTION */}
+              <div className="border-t border-slate-800 pt-3 space-y-3">
+                <label className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <span>تحديد الصلاحيات والصفحات المسموح بالوصول إليها:</span>
+                </label>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-900 p-3.5 rounded-2xl border border-slate-800">
+                  <label onClick={() => togglePermission('canAddReports')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canAddReports ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canAddReports} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>إضافة وتقارير العمل</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canDeleteReports')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canDeleteReports ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canDeleteReports} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>حذف سجلات التقارير</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canManageEquipment')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canManageEquipment ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canManageEquipment} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>إدارة المعدات والصيانة</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canManageCompanies')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canManageCompanies ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canManageCompanies} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>الشركات والماليات</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canManageDiesel')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canManageDiesel ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canManageDiesel} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>مخزن وصرف الديزل</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canIssueInvoicing')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canIssueInvoicing ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canIssueInvoicing} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>إصدار الفواتير</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canManageDrivers')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canManageDrivers ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canManageDrivers} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>إدارة السائقين</span>
+                  </label>
+
+                  <label onClick={() => togglePermission('canExportData')} className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${permissions.canExportData ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                    <input type="checkbox" checked={permissions.canExportData} readOnly className="rounded border-slate-700 text-amber-500" />
+                    <span>تصدير Excel و PDF</span>
+                  </label>
                 </div>
               </div>
 
@@ -383,7 +479,7 @@ ${permittedProjNames}
                     <span>المشاريع المصرح للمستخدم بالدخول إليها والعمل عليها:</span>
                   </label>
 
-                  {role !== 'admin' && (
+                  {role !== 'admin' && role !== 'primary_admin' && (
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-amber-500/40">
                       <input
                         type="checkbox"
@@ -391,12 +487,12 @@ ${permittedProjNames}
                         onChange={(e) => setIsAllProjectsAllowed(e.target.checked)}
                         className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
                       />
-                      <span>السماح بجميع المشاريع بدون تقييد</span>
+                      <span>السماح بجميع مشاريعك بدون تقييد</span>
                     </label>
                   )}
                 </div>
 
-                {!isAllProjectsAllowed && role !== 'admin' ? (
+                {!isAllProjectsAllowed && role !== 'admin' && role !== 'primary_admin' ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-900 p-3.5 rounded-2xl border border-slate-800 max-h-48 overflow-y-auto">
                     {allProjects.map((p) => {
                       const isChecked = selectedProjectIds.includes(p.id);
@@ -433,7 +529,7 @@ ${permittedProjNames}
                 ) : (
                   <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>تم تفعيل الوصول لجميع المشاريع في النظام لهذا الحساب.</span>
+                    <span>تم تفعيل الوصول لجميع المشاريع الخاصة بك لهذا الحساب.</span>
                   </div>
                 )}
               </div>
@@ -460,13 +556,13 @@ ${permittedProjNames}
           {/* USERS LIST TABLE */}
           <div className="space-y-3">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">
-              قائمة حسابات المستخدمين المسجلة بالنظام:
+              قائمة المستخدمين المسجلين تحت إدارتك بالنظام:
             </h3>
 
             <div className="space-y-2.5">
-              {allUsers.map((u) => {
-                const isAdmin = u.role === 'admin' || u.isAllProjectsAllowed;
-                const isCurrent = u.username === currentUser || u.email === currentUser;
+              {myCreatedUsers.map((u) => {
+                const isAdmin = u.role === 'admin' || u.role === 'primary_admin' || u.isPrimaryUser;
+                const isCurrent = u.username === currentUser || u.email === currentUser || u.id === currentUserId;
 
                 const userProjects = allProjects.filter(p => (u.assignedProjectIds || []).includes(p.id));
 
@@ -490,17 +586,19 @@ ${permittedProjNames}
                           <h4 className="text-sm font-black text-white">{u.name}</h4>
                           {isCurrent && (
                             <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              حسابك الحالي
+                              حسابك الحالي (مستخدم رئيسي)
                             </span>
                           )}
                           <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
-                            u.role === 'admin'
+                            u.isPrimaryUser || u.role === 'primary_admin'
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                               : u.role === 'project_manager'
                               ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                              : u.role === 'accountant'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                               : 'bg-slate-800 text-slate-300 border-slate-700'
                           }`}>
-                            {u.role === 'admin' ? 'مدير عام بالنظام' : u.role === 'project_manager' ? 'مدير مشروع' : 'مهندس موقع'}
+                            {u.isPrimaryUser || u.role === 'primary_admin' ? 'مستخدم رئيسي (مالك المشروع)' : u.role === 'project_manager' ? 'مدير مشروع' : u.role === 'accountant' ? 'محاسب / فواتير' : 'مهندس موقع'}
                           </span>
                         </div>
 
@@ -518,9 +616,9 @@ ${permittedProjNames}
                         {/* Allowed Projects Scope */}
                         <div className="text-[11px] pt-1 flex items-center gap-1.5 flex-wrap">
                           <span className="text-slate-500 font-bold">المشاريع المتاحة:</span>
-                          {isAdmin ? (
+                          {u.isAllProjectsAllowed || u.isPrimaryUser ? (
                             <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md font-bold">
-                              جميع المشاريع بالنظام
+                              جميع مشاريعك
                             </span>
                           ) : userProjects.length > 0 ? (
                             userProjects.map(p => (
@@ -548,7 +646,7 @@ ${permittedProjNames}
                             ? 'bg-emerald-500 text-slate-950 font-black'
                             : 'bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30'
                         }`}
-                        title="نسخ معلومات الدخول ورابط النظام لمشاركتها مع المهندس عبر واتساب"
+                        title="نسخ معلومات الدخول ورابط النظام لمشاركتها مع المستخدم عبر واتساب"
                       >
                         {copiedUserId === u.id ? (
                           <>
@@ -572,7 +670,7 @@ ${permittedProjNames}
                         <Edit3 className="w-4 h-4" />
                       </button>
 
-                      {u.id !== 'admin-jehad' && (
+                      {!u.isPrimaryUser && u.id !== 'admin-jehad' && (
                         <button
                           type="button"
                           onClick={() => handleDelete(u.id, u.name)}
@@ -593,7 +691,7 @@ ${permittedProjNames}
 
         {/* Modal Footer */}
         <div className="bg-slate-950 px-6 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>💡 عند فتح المستخدم للنظام، لن يرى سوى المشروع المصرح له به فقط.</span>
+          <span>💡 عند فتح المستخدم الفرعي للنظام، سيشاهد المشاريع والصلاحيات التي منحتها له فقط.</span>
           <button
             onClick={onClose}
             className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
@@ -606,3 +704,4 @@ ${permittedProjNames}
     </div>
   );
 };
+

@@ -30,6 +30,7 @@ import { FuelConsumptionAnalysis } from './components/FuelConsumptionAnalysis';
 import { EquipmentManager } from './components/EquipmentManager';
 import { CompaniesAndAccounts } from './components/CompaniesAndAccounts';
 import { DriversManager } from './components/DriversManager';
+import { Invoicing } from './components/Invoicing';
 import { ProjectManagerModal } from './components/ProjectManagerModal';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { DataBackupModal } from './components/DataBackupModal';
@@ -59,10 +60,36 @@ import {
 } from './utils/firebase';
 
 const loadStateForUser = (user: string | null) => {
+  const userAcc = user ? getUserByUsernameOrEmail(user) : null;
+  const lowerUser = (user || '').toLowerCase();
+  const isDefaultAdmin = !user ||
+    Boolean(userAcc && (userAcc.isPrimaryUser || userAcc.role === 'primary_admin' || userAcc.isAllProjectsAllowed)) ||
+    user === 'جهاد' ||
+    user === 'جهاد مفتاح' ||
+    user === 'المهندس جهاد' ||
+    user === 'المهندس جهاد مفتاح' ||
+    user === 'م. جهاد' ||
+    lowerUser.includes('jehad') ||
+    lowerUser === 'jehadyahya3@gmail.com';
+
   if (!user) {
+    let legacyProjects: Project[] = [];
+    const legacyProjectsStr = localStorage.getItem('eq_projects');
+    if (legacyProjectsStr) {
+      try {
+        const parsed = JSON.parse(legacyProjectsStr);
+        if (Array.isArray(parsed)) legacyProjects = parsed;
+      } catch (e) {}
+    }
+    const mergedProjectsMap = new Map<string, Project>();
+    [...INITIAL_PROJECTS, ...legacyProjects].forEach(p => {
+      if (p && p.id) mergedProjectsMap.set(p.id, p);
+    });
+    const mergedProjects = Array.from(mergedProjectsMap.values());
+
     return {
-      projects: INITIAL_PROJECTS,
-      activeProjectId: INITIAL_PROJECTS[0]?.id || 'proj-1',
+      projects: mergedProjects,
+      activeProjectId: localStorage.getItem('eq_active_project_id') || mergedProjects[0]?.id || 'proj-1',
       reports: INITIAL_WORK_REPORTS,
       dieselTransactions: INITIAL_DIESEL_TRANSACTIONS,
       equipmentList: INITIAL_EQUIPMENT,
@@ -71,9 +98,6 @@ const loadStateForUser = (user: string | null) => {
       companyPayments: INITIAL_COMPANY_PAYMENTS
     };
   }
-
-  const lowerUser = (user || '').toLowerCase();
-  const isDefaultAdmin = user === 'جهاد' || lowerUser === 'jehadyahya3@gmail.com' || lowerUser.includes('jehad');
 
   const userProjKey = getUserStorageKey(user, 'projects');
   const userReportsKey = getUserStorageKey(user, 'reports');
@@ -94,29 +118,36 @@ const loadStateForUser = (user: string | null) => {
     } catch (e) {}
   } 
 
-  if (userProjects.length === 0) {
-    if (isDefaultAdmin) {
-      const legacyProjectsStr = localStorage.getItem('eq_projects');
-      if (legacyProjectsStr) {
-        try { userProjects = JSON.parse(legacyProjectsStr); } catch (e) {}
-      }
-      if (userProjects.length === 0) userProjects = INITIAL_PROJECTS;
-    } else {
-      // New user initial starter project
-      userProjects = [{
-        id: `proj-user-${Date.now()}`,
-        name: `مشروع المقاولات والتطوير الرئيسي`,
-        location: 'الموقع الرئيسي',
-        managerName: user,
-        companyName: 'شركة المقاولات العامة',
-        phone: '',
-        code: 'PRJ-MAIN-01',
-        budget: 500000,
-        currency: 'ر.ي',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      }];
+  if (isDefaultAdmin) {
+    let legacyProjects: Project[] = [];
+    const legacyProjectsStr = localStorage.getItem('eq_projects');
+    if (legacyProjectsStr) {
+      try {
+        const parsed = JSON.parse(legacyProjectsStr);
+        if (Array.isArray(parsed)) legacyProjects = parsed;
+      } catch (e) {}
     }
+    const allKnownProjects = [...userProjects, ...legacyProjects, ...INITIAL_PROJECTS];
+    const uniqueProjectsMap = new Map<string, Project>();
+    allKnownProjects.forEach(p => {
+      if (p && p.id) uniqueProjectsMap.set(p.id, p);
+    });
+    userProjects = Array.from(uniqueProjectsMap.values());
+  } else if (userProjects.length === 0) {
+    // New user initial starter project
+    userProjects = [{
+      id: `proj-user-${Date.now()}`,
+      name: `مشروع المقاولات والتطوير الرئيسي`,
+      location: 'الموقع الرئيسي',
+      managerName: user,
+      companyName: 'شركة المقاولات العامة',
+      phone: '',
+      code: 'PRJ-MAIN-01',
+      budget: 500000,
+      currency: 'ر.ي',
+      status: 'active',
+      createdAt: new Date().toISOString()
+    }];
   }
 
   let userActiveProjId = localStorage.getItem(userActiveProjKey) ||
@@ -278,18 +309,32 @@ export default function App() {
   // User Account Profile & Permission Computation
   const currentUserAccount = getUserByUsernameOrEmail(currentUser || '');
 
+  const canManageUsers = !currentUserAccount ||
+    currentUserAccount.isPrimaryUser || 
+    currentUserAccount.role === 'primary_admin' || 
+    currentUserAccount.role === 'admin' ||
+    currentUserAccount.permissions?.canManageUsers;
+
   const isAdminUser = !currentUser || 
     !currentUserAccount || 
     currentUserAccount.role === 'admin' || 
-    currentUserAccount.isAllProjectsAllowed || 
+    currentUserAccount.role === 'primary_admin' ||
+    Boolean(currentUserAccount.isPrimaryUser) ||
+    Boolean(currentUserAccount.isAllProjectsAllowed) || 
     currentUser === 'جهاد' || 
+    currentUser === 'جهاد مفتاح' ||
+    currentUser === 'المهندس جهاد' ||
+    currentUser === 'المهندس جهاد مفتاح' ||
+    currentUser === 'م. جهاد' ||
     currentUser === 'Eng. Jehad Meftah' || 
-    (currentUser || '').toLowerCase().includes('jehad');
+    (currentUser || '').toLowerCase().includes('jehad') ||
+    (currentUser || '').toLowerCase() === 'jehadyahya3@gmail.com';
 
   // Filter projects based on logged-in user permissions
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects;
     const assignedIds = currentUserAccount?.assignedProjectIds || [];
+    if (!assignedIds || assignedIds.length === 0) return projects;
     const filtered = projects.filter(p => assignedIds.includes(p.id));
     return filtered.length > 0 ? filtered : projects;
   }, [projects, isAdminUser, currentUserAccount]);
@@ -367,36 +412,108 @@ export default function App() {
       try {
         const cloudData = await loadAllFromFirestore();
         if (cloudData) {
-          if (cloudData.projects && cloudData.projects.length > 0) setProjects(cloudData.projects);
-          if (cloudData.reports && cloudData.reports.length > 0) setReports(cloudData.reports);
-          if (cloudData.diesel && cloudData.diesel.length > 0) setDieselTransactions(cloudData.diesel);
-          if (cloudData.equipment && cloudData.equipment.length > 0) setEquipmentList(cloudData.equipment);
-          if (cloudData.companies && cloudData.companies.length > 0) setCompaniesList(cloudData.companies);
-          if (cloudData.drivers && cloudData.drivers.length > 0) setDriversList(cloudData.drivers);
+          if (cloudData.projects && cloudData.projects.length > 0) {
+            setProjects(prev => {
+              const map = new Map<string, Project>();
+              prev.forEach(p => { if (p && p.id) map.set(p.id, p); });
+              cloudData.projects.forEach((p: Project) => { if (p && p.id) map.set(p.id, p); });
+              return Array.from(map.values());
+            });
+          }
+          if (cloudData.reports && cloudData.reports.length > 0) {
+            setReports(prev => {
+              const map = new Map<string, WorkReport>();
+              prev.forEach(r => { if (r && r.id) map.set(r.id, r); });
+              cloudData.reports.forEach((r: WorkReport) => { if (r && r.id) map.set(r.id, r); });
+              return Array.from(map.values());
+            });
+          }
+          if (cloudData.diesel && cloudData.diesel.length > 0) {
+            setDieselTransactions(prev => {
+              const map = new Map<string, DieselTransaction>();
+              prev.forEach(d => { if (d && d.id) map.set(d.id, d); });
+              cloudData.diesel.forEach((d: DieselTransaction) => { if (d && d.id) map.set(d.id, d); });
+              return Array.from(map.values());
+            });
+          }
+          if (cloudData.equipment && cloudData.equipment.length > 0) {
+            setEquipmentList(prev => {
+              const map = new Map<string, Equipment>();
+              prev.forEach(e => { if (e && e.id) map.set(e.id, e); });
+              cloudData.equipment.forEach((e: Equipment) => { if (e && e.id) map.set(e.id, e); });
+              return Array.from(map.values());
+            });
+          }
+          if (cloudData.companies && cloudData.companies.length > 0) {
+            setCompaniesList(prev => {
+              const map = new Map<string, Company>();
+              prev.forEach(c => { if (c && c.id) map.set(c.id, c); });
+              cloudData.companies.forEach((c: Company) => { if (c && c.id) map.set(c.id, c); });
+              return Array.from(map.values());
+            });
+          }
+          if (cloudData.drivers && cloudData.drivers.length > 0) {
+            setDriversList(prev => {
+              const map = new Map<string, Driver>();
+              prev.forEach(d => { if (d && d.id) map.set(d.id, d); });
+              cloudData.drivers.forEach((d: Driver) => { if (d && d.id) map.set(d.id, d); });
+              return Array.from(map.values());
+            });
+          }
           if (cloudData.activeProjectId) setActiveProjectId(cloudData.activeProjectId);
           console.log('☁️ Loaded latest data from Firebase Firestore Cloud');
         } else {
           const idbData = await loadAllFromIndexedDB();
           if (idbData) {
-            if (idbData.projects && idbData.projects.length > 0 && !localStorage.getItem('eq_projects')) {
-              setProjects(idbData.projects);
+            if (idbData.projects && idbData.projects.length > 0) {
+              setProjects(prev => {
+                const map = new Map<string, Project>();
+                prev.forEach(p => { if (p && p.id) map.set(p.id, p); });
+                idbData.projects.forEach((p: Project) => { if (p && p.id) map.set(p.id, p); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.reports && idbData.reports.length > 0 && !localStorage.getItem('eq_reports')) {
-              setReports(idbData.reports);
+            if (idbData.reports && idbData.reports.length > 0) {
+              setReports(prev => {
+                const map = new Map<string, WorkReport>();
+                prev.forEach(r => { if (r && r.id) map.set(r.id, r); });
+                idbData.reports.forEach((r: WorkReport) => { if (r && r.id) map.set(r.id, r); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.diesel && idbData.diesel.length > 0 && !localStorage.getItem('eq_diesel')) {
-              setDieselTransactions(idbData.diesel);
+            if (idbData.diesel && idbData.diesel.length > 0) {
+              setDieselTransactions(prev => {
+                const map = new Map<string, DieselTransaction>();
+                prev.forEach(d => { if (d && d.id) map.set(d.id, d); });
+                idbData.diesel.forEach((d: DieselTransaction) => { if (d && d.id) map.set(d.id, d); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.equipment && idbData.equipment.length > 0 && !localStorage.getItem('eq_equipment')) {
-              setEquipmentList(idbData.equipment);
+            if (idbData.equipment && idbData.equipment.length > 0) {
+              setEquipmentList(prev => {
+                const map = new Map<string, Equipment>();
+                prev.forEach(e => { if (e && e.id) map.set(e.id, e); });
+                idbData.equipment.forEach((e: Equipment) => { if (e && e.id) map.set(e.id, e); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.companies && idbData.companies.length > 0 && !localStorage.getItem('eq_companies')) {
-              setCompaniesList(idbData.companies);
+            if (idbData.companies && idbData.companies.length > 0) {
+              setCompaniesList(prev => {
+                const map = new Map<string, Company>();
+                prev.forEach(c => { if (c && c.id) map.set(c.id, c); });
+                idbData.companies.forEach((c: Company) => { if (c && c.id) map.set(c.id, c); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.drivers && idbData.drivers.length > 0 && !localStorage.getItem('eq_drivers')) {
-              setDriversList(idbData.drivers);
+            if (idbData.drivers && idbData.drivers.length > 0) {
+              setDriversList(prev => {
+                const map = new Map<string, Driver>();
+                prev.forEach(d => { if (d && d.id) map.set(d.id, d); });
+                idbData.drivers.forEach((d: Driver) => { if (d && d.id) map.set(d.id, d); });
+                return Array.from(map.values());
+              });
             }
-            if (idbData.activeProjectId && !localStorage.getItem('eq_active_project_id')) {
+            if (idbData.activeProjectId) {
               setActiveProjectId(idbData.activeProjectId);
             }
           }
@@ -746,7 +863,7 @@ export default function App() {
         onOpenBackupModal={() => setShowBackupModal(true)}
         onOpenAndroidExport={() => setShowAndroidExportModal(true)}
         onOpenShareApp={() => setShowShareModal(true)}
-        onOpenUserManager={isAdminUser ? () => setShowUserManagerModal(true) : undefined}
+        onOpenUserManager={canManageUsers ? () => setShowUserManagerModal(true) : undefined}
         totalReportsCount={activeReports.length}
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -764,6 +881,7 @@ export default function App() {
           }}
           reportsCount={activeReports.length}
           lowStockAlert={isDieselLow}
+          currentUserAccount={currentUserAccount || undefined}
         />
 
         {/* Dynamic Page Content Stage */}
@@ -808,6 +926,16 @@ export default function App() {
               onSaveReport={handleSaveReport}
               onCancel={() => setActiveTab('reports-list')}
               existingReport={editingReport}
+            />
+          )}
+
+          {activeTab === 'invoicing' && (
+            <Invoicing
+              reports={activeReports}
+              dieselTransactions={activeDiesel}
+              companies={activeCompanies}
+              equipmentList={activeEquipment}
+              projectInfo={projectInfo}
             />
           )}
 

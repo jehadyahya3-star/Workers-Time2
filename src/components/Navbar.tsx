@@ -148,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenShareApp && (
               <button
                 onClick={onOpenShareApp}
-                title="مشاركة التطبيق بالكامل وقواعد البيانات المدمجة"
+                title="مشاركة التطبيق"
                 className="bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
               >
                 <Share2 className="w-4 h-4" />

@@ -340,6 +340,49 @@ export const FuelConsumptionAnalysis: React.FC<FuelConsumptionAnalysisProps> = (
     return list.sort((a, b) => b.value - a.value);
   }, [summaryStats.equipmentTotals, viewMetric]);
 
+  // 6. Detailed Interactive Equipment Comparison Data for Recharts
+  const [comparisonMetric, setComparisonMetric] = useState<'liters' | 'liters_vs_refuels' | 'avg_refuel' | 'cost'>('liters_vs_refuels');
+
+  const equipmentComparisonList = useMemo(() => {
+    const map: Record<string, {
+      name: string;
+      totalLiters: number;
+      totalCost: number;
+      refuelCount: number;
+      avgLitersPerRefuel: number;
+      sharePercent: number;
+    }> = {};
+
+    filteredRecords.forEach(r => {
+      const eqName = r.equipmentName || 'غير محدد';
+      if (!map[eqName]) {
+        map[eqName] = {
+          name: eqName,
+          totalLiters: 0,
+          totalCost: 0,
+          refuelCount: 0,
+          avgLitersPerRefuel: 0,
+          sharePercent: 0
+        };
+      }
+      map[eqName].totalLiters += r.quantityLiters;
+      map[eqName].totalCost += r.totalCost;
+      map[eqName].refuelCount += 1;
+    });
+
+    const totalLitersAll = summaryStats.totalLiters || 1;
+
+    return Object.values(map)
+      .map(item => ({
+        ...item,
+        totalLiters: Math.round(item.totalLiters * 10) / 10,
+        totalCost: Math.round(item.totalCost),
+        avgLitersPerRefuel: item.refuelCount > 0 ? Math.round((item.totalLiters / item.refuelCount) * 10) / 10 : 0,
+        sharePercent: Math.round((item.totalLiters / totalLitersAll) * 1000) / 10
+      }))
+      .sort((a, b) => b.totalLiters - a.totalLiters);
+  }, [filteredRecords, summaryStats.totalLiters]);
+
   // Export to CSV
   const handleExportCSV = () => {
     if (filteredRecords.length === 0) {
@@ -939,6 +982,239 @@ export const FuelConsumptionAnalysis: React.FC<FuelConsumptionAnalysisProps> = (
           )}
         </div>
 
+      </div>
+
+      {/* Dedicated Interactive Equipment Comparison Section (Recharts) */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div>
+            <h2 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-amber-500" />
+              <span>مقارنة استهلاك الوقود بين المعدات خلال الفترة الحالية</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              رسم بياني تفاعلي يُمكّنك من مقارنة كميات الديزل، التكاليف المالية، وعدد مرات التعبئة مباشرة بين كافة معدات المشروع
+            </p>
+          </div>
+
+          {/* Comparison Metric Mode Buttons */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+            <button
+              onClick={() => setComparisonMetric('liters_vs_refuels')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                comparisonMetric === 'liters_vs_refuels'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              الكمية vs مرات التعبئة
+            </button>
+            <button
+              onClick={() => setComparisonMetric('avg_refuel')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                comparisonMetric === 'avg_refuel'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              متوسط التعبئة الواحدة
+            </button>
+            <button
+              onClick={() => setComparisonMetric('cost')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                comparisonMetric === 'cost'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              التكلفة الإجمالية
+            </button>
+          </div>
+        </div>
+
+        {/* Equipment Comparison Recharts Stage */}
+        <div className="h-80 w-full dir-ltr pt-2">
+          {equipmentComparisonList.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={equipmentComparisonList} margin={{ top: 20, right: 25, left: 10, bottom: 30 }}>
+                <defs>
+                  <linearGradient id="amberBarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#d97706" stopOpacity={0.8} />
+                  </linearGradient>
+                  <linearGradient id="blueBarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.8} />
+                  </linearGradient>
+                  <linearGradient id="emeraldBarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#047857" stopOpacity={0.8} />
+                  </linearGradient>
+                  <linearGradient id="purpleBarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#6d28d9" stopOpacity={0.8} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#94a3b8" 
+                  fontSize={11} 
+                  tickMargin={10} 
+                  interval={0}
+                  tickFormatter={(val) => val.length > 12 ? `${val.slice(0, 10)}..` : val}
+                />
+                <YAxis 
+                  yAxisId="left" 
+                  stroke="#94a3b8" 
+                  fontSize={11} 
+                />
+                {comparisonMetric === 'liters_vs_refuels' && (
+                  <YAxis 
+                    yAxisId="right" 
+                    orientation="right" 
+                    stroke="#3b82f6" 
+                    fontSize={11} 
+                  />
+                )}
+                <Tooltip 
+                  content={({ active, payload, label }: any) => {
+                    if (active && payload && payload.length) {
+                      const itemData = equipmentComparisonList.find(e => e.name === label);
+                      return (
+                        <div className="bg-slate-950 text-white p-3.5 rounded-2xl border border-slate-700 shadow-2xl text-xs space-y-1.5 dir-rtl text-right">
+                          <p className="font-black text-amber-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
+                            <HardHat className="w-4 h-4 text-amber-400" />
+                            <span>المعدة: {label}</span>
+                          </p>
+                          <div className="flex justify-between items-center gap-4 text-slate-200">
+                            <span>إجمالي الوقود:</span>
+                            <strong className="text-amber-400 font-mono">{itemData?.totalLiters.toLocaleString()} لتر</strong>
+                          </div>
+                          <div className="flex justify-between items-center gap-4 text-slate-200">
+                            <span>إجمالي التكلفة:</span>
+                            <strong className="text-emerald-400 font-mono">{formatCurrency(itemData?.totalCost || 0, projectInfo.currency)}</strong>
+                          </div>
+                          <div className="flex justify-between items-center gap-4 text-slate-200">
+                            <span>عدد مرات التعبئة:</span>
+                            <strong className="text-blue-400 font-mono">{itemData?.refuelCount} مرة</strong>
+                          </div>
+                          <div className="flex justify-between items-center gap-4 text-slate-200">
+                            <span>متوسط التعبئة الواحدة:</span>
+                            <strong className="text-purple-400 font-mono">{itemData?.avgLitersPerRefuel} لتر / تعبئة</strong>
+                          </div>
+                          <div className="flex justify-between items-center gap-4 text-slate-300 border-t border-slate-800 pt-1 text-[11px]">
+                            <span>نسبة الاستهلاك الإجمالي:</span>
+                            <span className="text-amber-300 font-bold">{itemData?.sharePercent}%</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '12px', fontWeight: 'bold' }} />
+
+                {comparisonMetric === 'liters_vs_refuels' && (
+                  <>
+                    <Bar 
+                      yAxisId="left" 
+                      dataKey="totalLiters" 
+                      name="إجمالي الوقود (لتر)" 
+                      fill="url(#amberBarGrad)" 
+                      radius={[6, 6, 0, 0]} 
+                      maxBarSize={45} 
+                    />
+                    <Bar 
+                      yAxisId="right" 
+                      dataKey="refuelCount" 
+                      name="عدد مرات التعبئة (مرة)" 
+                      fill="url(#blueBarGrad)" 
+                      radius={[6, 6, 0, 0]} 
+                      maxBarSize={45} 
+                    />
+                  </>
+                )}
+
+                {comparisonMetric === 'avg_refuel' && (
+                  <Bar 
+                    yAxisId="left" 
+                    dataKey="avgLitersPerRefuel" 
+                    name="متوسط كمية التعبئة الواحدة (لتر)" 
+                    fill="url(#purpleBarGrad)" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={55} 
+                  />
+                )}
+
+                {comparisonMetric === 'cost' && (
+                  <Bar 
+                    yAxisId="left" 
+                    dataKey="totalCost" 
+                    name={`التكلفة الإجمالية للوقود (${projectInfo.currency || 'ر.ي'})`} 
+                    fill="url(#emeraldBarGrad)" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={55} 
+                  />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-400 text-xs font-bold">
+              لا توجد بيانات مقارنة للعرض
+            </div>
+          )}
+        </div>
+
+        {/* Equipment Comparative Quick Summary Badges */}
+        {equipmentComparisonList.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+            <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-xl border border-amber-200 dark:border-amber-900/50 flex items-center gap-3">
+              <div className="bg-amber-500 text-slate-950 p-2 rounded-lg font-black">
+                #1
+              </div>
+              <div className="truncate">
+                <span className="block text-[11px] text-amber-800 dark:text-amber-400 font-bold">المعدة الأعلى استهلاكاً:</span>
+                <strong className="text-slate-900 dark:text-slate-100 font-extrabold text-sm truncate block">
+                  {equipmentComparisonList[0]?.name}
+                </strong>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {equipmentComparisonList[0]?.totalLiters.toLocaleString()} لتر ({equipmentComparisonList[0]?.sharePercent}%)
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-xl border border-blue-200 dark:border-blue-900/50 flex items-center gap-3">
+              <div className="bg-blue-500 text-white p-2 rounded-lg font-black">
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <span className="block text-[11px] text-blue-800 dark:text-blue-400 font-bold">الأكثر تكراراً للتعبئة:</span>
+                <strong className="text-slate-900 dark:text-slate-100 font-extrabold text-sm truncate block">
+                  {[...equipmentComparisonList].sort((a, b) => b.refuelCount - a.refuelCount)[0]?.name}
+                </strong>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {[...equipmentComparisonList].sort((a, b) => b.refuelCount - a.refuelCount)[0]?.refuelCount} عمليات تعبئة
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 dark:bg-purple-950/30 p-3 rounded-xl border border-purple-200 dark:border-purple-900/50 flex items-center gap-3">
+              <div className="bg-purple-500 text-white p-2 rounded-lg font-black">
+                <Droplet className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <span className="block text-[11px] text-purple-800 dark:text-purple-400 font-bold">الأعلى في شحنة التعبئة:</span>
+                <strong className="text-slate-900 dark:text-slate-100 font-extrabold text-sm truncate block">
+                  {[...equipmentComparisonList].sort((a, b) => b.avgLitersPerRefuel - a.avgLitersPerRefuel)[0]?.name}
+                </strong>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  بمتوسط {[...equipmentComparisonList].sort((a, b) => b.avgLitersPerRefuel - a.avgLitersPerRefuel)[0]?.avgLitersPerRefuel} لتر / شحنة
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Secondary Charts: Equipment Breakdown & Distribution */}

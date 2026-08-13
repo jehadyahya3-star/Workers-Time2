@@ -60,5 +60,21 @@
       "form_factor": "narrow",
       "label": "تطبيق الهاتف الذكي"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "تقارير العمل",
+      "short_name": "التقارير",
+      "description": "إضافة تقرير عمل جديد",
+      "url": "/?shortcut=reports",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "حركة الديزل",
+      "short_name": "الديزل",
+      "description": "سجل استلام وصرف الديزل",
+      "url": "/?shortcut=diesel",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
   ]
 }

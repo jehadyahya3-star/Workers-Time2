@@ -43,8 +43,29 @@ import {
   Camera,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  History,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
+
+const formatAuditDate = (isoString?: string) => {
+  if (!isoString) return '-';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    return isoString;
+  }
+};
 
 export type ReportSortField = 
   | 'reportNumber' 
@@ -146,7 +167,7 @@ export const WorkReportsList: React.FC<WorkReportsListProps> = ({
       docText += `ملخص الإحصائيات:\n`;
       docText += `عدد التقارير: ${filteredReports.length}\n`;
       docText += `إجمالي الساعات الصافية: ${filteredReports.reduce((s, r) => s + (r.totalNetHours || 0), 0)} ساعة\n`;
-      docText += `إجمالي كمية الديزل: ${filteredReports.reduce((s, r) => s + (r.dieselLiters || 0), 0)} لتر\n`;
+      docText += `إجمالي كمية الديزل: ${filteredReports.reduce((s, r) => s + (r.costs?.dieselLiters || (r as any).dieselLiters || 0), 0)} لتر\n`;
       docText += `إجمالي المستحقات المالية: ${filteredReports.reduce((s, r) => s + (r.grossAmount || 0), 0)} ${projectInfo.currency || 'ر.ي'}\n`;
       docText += `--------------------------------------------------\n\n`;
 
@@ -154,9 +175,9 @@ export const WorkReportsList: React.FC<WorkReportsListProps> = ({
       filteredReports.forEach((r, idx) => {
         docText += `${idx + 1}. تقرير رقم: ${r.reportNumber} | التاريخ: ${r.date}\n`;
         docText += `   المعدة: ${r.equipmentName} | السائق: ${r.driverName} | الشركة: ${r.companyName}\n`;
-        docText += `   ساعات العمل الصافية: ${r.totalNetHours} س | الديزل: ${r.dieselLiters || 0} لتر\n`;
+        docText += `   ساعات العمل الصافية: ${r.totalNetHours} س | الديزل: ${r.costs?.dieselLiters || (r as any).dieselLiters || 0} لتر\n`;
         docText += `   المبلغ الإجمالي: ${r.grossAmount || 0} ${projectInfo.currency || 'ر.ي'}\n`;
-        if (r.workDescription) docText += `   بيان العمل: ${r.workDescription}\n`;
+        if ((r as any).workDescription || r.notes) docText += `   بيان العمل: ${(r as any).workDescription || r.notes}\n`;
         docText += `\n`;
       });
 
@@ -540,7 +561,7 @@ export const WorkReportsList: React.FC<WorkReportsListProps> = ({
               <span className="text-slate-300">|</span>
               <span>الساعات: <strong className="text-slate-900">{formatHoursDigital(filteredReports.reduce((s, r) => s + (r.totalNetHours || 0), 0))}</strong></span>
               <span className="text-slate-300">|</span>
-              <span>الديزل: <strong className="text-slate-900">{filteredReports.reduce((s, r) => s + (r.dieselLiters || 0), 0)} لتر</strong></span>
+              <span>الديزل: <strong className="text-slate-900">{filteredReports.reduce((s, r) => s + (r.costs?.dieselLiters || (r as any).dieselLiters || 0), 0)} لتر</strong></span>
               <span className="text-slate-300">|</span>
               <span>المستحقات: <strong className="text-emerald-700 font-extrabold">{formatCurrency(filteredReports.reduce((s, r) => s + (r.grossAmount || 0), 0), projectInfo.currency || 'ر.ي')}</strong></span>
             </div>
@@ -1046,6 +1067,150 @@ export const WorkReportsList: React.FC<WorkReportsListProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Audit Log (سجل النشاطات والتغيرات) */}
+              <div className="pt-4 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600">
+                      <History className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">سجل النشاطات وتتبع التعديلات (Audit Log)</h4>
+                      <p className="text-[10px] text-slate-500 font-semibold">تتبع زمني موثق لتاريخ الإنشاء، الجهة المعدلة، وأوقات حفظ التقرير</p>
+                    </div>
+                  </div>
+                  
+                  <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-2.5 py-1 rounded-full border border-slate-200">
+                    عدد الإجراءات: {(selectedReport.auditLogs?.length || (selectedReport.updatedAt ? 2 : 1))}
+                  </span>
+                </div>
+
+                {/* Quick Summary Metadata Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block">تاريخ ووقت إنشاء التقرير:</span>
+                      <strong className="text-slate-800 text-[11px] font-black">
+                        {formatAuditDate(selectedReport.createdAt)}
+                      </strong>
+                      <span className="text-[10px] text-slate-500 mr-1 block">
+                        بواسطة: {selectedReport.createdBy || selectedReport.supervisorName || selectedReport.driverName || 'المسؤول الرئيسي'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block">آخر وقت لحفظ وتعديل البيانات:</span>
+                      <strong className="text-slate-800 text-[11px] font-black">
+                        {formatAuditDate(selectedReport.updatedAt || selectedReport.createdAt)}
+                      </strong>
+                      <span className="text-[10px] text-slate-500 mr-1 block">
+                        بواسطة: {selectedReport.updatedBy || selectedReport.createdBy || selectedReport.supervisorName || 'المسؤول الرئيسي'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Audit Timeline / History List */}
+                <div className="space-y-2 bg-slate-900 text-slate-100 p-3.5 rounded-2xl border border-slate-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>تسلسل السجل الزمني للتغييرات:</span>
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {selectedReport.auditLogs && selectedReport.auditLogs.length > 0 ? (
+                      selectedReport.auditLogs.map((log, idx) => (
+                        <div key={log.id || idx} className="bg-slate-800/90 border border-slate-700/80 p-2.5 rounded-xl text-xs flex items-start justify-between gap-3 shadow-xs">
+                          <div className="flex items-start gap-2">
+                            <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                              log.action === 'create' ? 'bg-emerald-400' : log.action === 'update' ? 'bg-amber-400' : 'bg-blue-400'
+                            }`} />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <strong className="text-white text-[11px] font-black">{log.user}</strong>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${
+                                  log.action === 'create' 
+                                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800' 
+                                    : log.action === 'update' 
+                                    ? 'bg-amber-950 text-amber-300 border-amber-800' 
+                                    : 'bg-blue-950 text-blue-300 border-blue-800'
+                                }`}>
+                                  {log.action === 'create' ? 'أنشأ التقرير' : log.action === 'update' ? 'تعديل وحفظ' : 'إجراء'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 mt-1 font-medium">{log.details}</p>
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
+                            {formatAuditDate(log.timestamp)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      /* Fallback timeline for old existing reports */
+                      <div className="space-y-2">
+                        <div className="bg-slate-800/90 border border-slate-700/80 p-2.5 rounded-xl text-xs flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <strong className="text-white text-[11px] font-black">
+                                  {selectedReport.createdBy || selectedReport.supervisorName || selectedReport.driverName || 'المسؤول الرئيسي'}
+                                </strong>
+                                <span className="text-[9px] bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800 font-bold">
+                                  إنشاء التقرير الأولي
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 mt-1 font-medium">
+                                تسجيل التقرير رقم ({selectedReport.reportNumber}) بـ {selectedReport.totalNetHours} ساعة عمل
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
+                            {formatAuditDate(selectedReport.createdAt)}
+                          </span>
+                        </div>
+
+                        {selectedReport.updatedAt && (
+                          <div className="bg-slate-800/90 border border-slate-700/80 p-2.5 rounded-xl text-xs flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-white text-[11px] font-black">
+                                    {selectedReport.updatedBy || selectedReport.supervisorName || 'محرر التقرير'}
+                                  </strong>
+                                  <span className="text-[9px] bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-800 font-bold">
+                                    آخر حفظ وتحديث
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-300 mt-1 font-medium">
+                                  حفظ التغييرات وتحديث بيانات ساعات ومستحقات التقرير
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 shrink-0 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
+                              {formatAuditDate(selectedReport.updatedAt)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
             </div>
 

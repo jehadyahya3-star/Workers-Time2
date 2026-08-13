@@ -74,6 +74,14 @@ export interface Project {
   createdAt?: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string; // ISO date string e.g. 2026-08-10T15:30:00.000Z
+  action: 'create' | 'update' | 'signature' | 'status';
+  user: string; // اسم المستخدم الذي قام بالعملية
+  details: string; // تفاصيل العملية أو التغيير
+}
+
 export interface WorkReport {
   id: string;
   projectId?: string;
@@ -113,6 +121,10 @@ export interface WorkReport {
   itemUnit?: string; // وحدة قياس كمية الإنجاز
   notes?: string;
   createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  auditLogs?: AuditLogEntry[];
 }
 
 export interface DieselTransaction {
@@ -158,6 +170,7 @@ export interface Equipment {
   regNumber: string;
   companyName: string;
   status: 'active' | 'maintenance' | 'idle';
+  imageUrl?: string; // صورة المعدة
   hourlyRate: number;
   dailyRate: number;
   monthlyRate: number;

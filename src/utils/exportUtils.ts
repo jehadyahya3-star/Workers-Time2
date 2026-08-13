@@ -817,6 +817,18 @@ export const exportSingleReportToPDF = (
           </div>
         </div>
 
+        <!-- Audit Log Footer Details -->
+        <div style="margin-top: 25px; padding: 10px 14px; border: 1px border-dashed #cbd5e1; background: #f8fafc; border-radius: 8px; font-size: 10px; color: #475569; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>🛡️ سجل النشاطات والتعديلات (Audit Log):</strong> 
+            تم إنشاء التقرير: ${report.createdAt ? new Date(report.createdAt).toLocaleString('ar-SA') : report.date} بواسطة (${report.createdBy || report.supervisorName || report.driverName || 'المسؤول الرئيسي'})
+            ${report.updatedAt ? ` | آخر حفظ وتحديث: ${new Date(report.updatedAt).toLocaleString('ar-SA')} بواسطة (${report.updatedBy || 'المسؤول الرئيسي'})` : ''}
+          </div>
+          <div style="font-weight: bold; color: #64748b;">
+            وثيقة رقمية معتمدة
+          </div>
+        </div>
+
         <script>
           window.onload = function() {
             setTimeout(function() {

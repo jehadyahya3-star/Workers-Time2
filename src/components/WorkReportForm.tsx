@@ -3,6 +3,7 @@ import {
   ContractType, 
   WorkPeriod, 
   WorkReport, 
+  AuditLogEntry,
   Equipment, 
   Company, 
   Driver, 
@@ -582,6 +583,43 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({
     e.preventDefault();
 
     const selectedEquipment = equipmentList.find(e => e.name === selectedEquipmentName);
+    const nowIso = new Date().toISOString();
+    const activeUserName = supervisorName?.trim() || selectedDriverName?.trim() || 'المسؤول الرئيسي';
+
+    let updatedLogs: AuditLogEntry[] = [];
+    
+    if (existingReport) {
+      const prevLogs = existingReport.auditLogs || [];
+      const initialLog: AuditLogEntry = {
+        id: `log-${Date.now()}-init`,
+        timestamp: existingReport.createdAt || nowIso,
+        action: 'create',
+        user: existingReport.createdBy || activeUserName,
+        details: `إنشاء التقرير الأولي رقم (${reportNumber})`
+      };
+
+      const baseLogs = prevLogs.length > 0 ? prevLogs : [initialLog];
+
+      const newUpdateLog: AuditLogEntry = {
+        id: `log-${Date.now()}`,
+        timestamp: nowIso,
+        action: 'update',
+        user: activeUserName,
+        details: `تعديل وحفظ بيانات التقرير (إجمالي الساعات: ${totalNetHours}س - المستحق الصافي: ${netCompanyDue} ر.س)`
+      };
+
+      updatedLogs = [...baseLogs, newUpdateLog];
+    } else {
+      updatedLogs = [
+        {
+          id: `log-${Date.now()}-create`,
+          timestamp: nowIso,
+          action: 'create',
+          user: activeUserName,
+          details: `إنشاء التقرير اليومي الجديد رقم (${reportNumber}) وتسجيل ساعات العمل (${totalNetHours}س)`
+        }
+      ];
+    }
 
     const report: WorkReport = {
       id: existingReport?.id || `wr-${Date.now()}`,
@@ -628,7 +666,11 @@ export const WorkReportForm: React.FC<WorkReportFormProps> = ({
       completedQuantity: Number(completedQuantity) || 0,
       itemUnit: itemUnit || '',
       notes,
-      createdAt: existingReport?.createdAt || new Date().toISOString()
+      createdAt: existingReport?.createdAt || nowIso,
+      createdBy: existingReport?.createdBy || activeUserName,
+      updatedAt: nowIso,
+      updatedBy: activeUserName,
+      auditLogs: updatedLogs
     };
 
     onSaveReport(report);

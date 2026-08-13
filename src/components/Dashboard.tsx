@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   WorkReport, 
   DieselTransaction, 
@@ -54,7 +54,17 @@ import {
   Layers,
   ListPlus,
   Tag,
-  Plus
+  Plus,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Sparkles,
+  MapPin,
+  User
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -131,6 +141,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return saved ? parseInt(saved, 10) : 500;
   });
   const [showThresholdSettings, setShowThresholdSettings] = useState<boolean>(false);
+
+  // Interactive Project Budget vs Actual Table State
+  const [projectSearchQuery, setProjectSearchQuery] = useState<string>('');
+  const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'active' | 'completed' | 'overbudget'>('all');
+  const [projectSortField, setProjectSortField] = useState<'name' | 'budget' | 'actualSpent' | 'remaining' | 'consumptionPct' | 'completionPct'>('consumptionPct');
+  const [projectSortOrder, setProjectSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
   const handleUpdateThreshold = (val: number) => {
     setDieselAlertThreshold(val);
@@ -314,7 +331,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       id: eq.id,
       name: eq.name,
       type: eq.type,
-      plateNumber: eq.plateNumber,
+      plateNumber: (eq as any).plateNumber || eq.regNumber,
       totalLiters,
       totalCost,
       currentMonthLiters,
@@ -378,7 +395,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const maintenancePct = projectBudget > 0 ? Math.round((maintenanceAndLubesCost / projectBudget) * 100) : 0;
   const remainingPct = projectBudget > 0 && remainingBudget > 0 ? Math.round((remainingBudget / projectBudget) * 100) : 0;
 
-  // Comparison data for all projects (Budget vs Actual)
+  // Comparison data for all projects (Budget vs Actual Costs & Completion Progress)
+  const currentProjectItemsList = projectInfo.projectItems || [];
+  
   const allProjectsBudgetComparison = (allProjects.length > 0 ? allProjects : [{
     id: 'proj-1',
     name: projectInfo.name,
@@ -386,7 +405,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     companyName: projectInfo.companyName,
     location: projectInfo.location,
     managerName: projectInfo.managerName,
-    phone: projectInfo.phone
+    phone: projectInfo.phone,
+    status: 'active' as const
   }]).map(proj => {
     const projReports = allReports.filter(r => r.projectId === proj.id || (!r.projectId && proj.id === 'proj-1'));
     const projDiesel = allDieselTransactions.filter(t => t.type === 'consume' && (t.projectId === proj.id || (!t.projectId && proj.id === 'proj-1')));
@@ -400,16 +420,95 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const projRem = projBud - projActualTotal;
     const projPct = projBud > 0 ? Math.round((projActualTotal / projBud) * 100) : 0;
 
+    // Visual Completion / Progress Rate calculation
+    const items = proj.projectItems || (proj.id === 'proj-1' ? currentProjectItemsList : []);
+    let totalTargetQty = 0;
+    let totalCompletedQty = 0;
+
+    items.forEach(it => {
+      if (it.targetQuantity && it.targetQuantity > 0) {
+        totalTargetQty += it.targetQuantity;
+        const itemReps = projReports.filter(r => r.workItem === it.name);
+        const comp = itemReps.reduce((sum, r) => {
+          if (r.completedQuantity && r.completedQuantity > 0) return sum + r.completedQuantity;
+          if (r.contractType === 'meter' && r.quantityMeters > 0) return sum + r.quantityMeters;
+          return sum;
+        }, 0);
+        totalCompletedQty += comp;
+      }
+    });
+
+    let completionPct = 0;
+    if (totalTargetQty > 0) {
+      completionPct = Math.min(100, Math.round((totalCompletedQty / totalTargetQty) * 100));
+    } else if (proj.status === 'completed') {
+      completionPct = 100;
+    } else if (projBud > 0) {
+      completionPct = Math.min(100, Math.round((projWorkCost / projBud) * 100));
+      if (completionPct === 0 && projReports.length > 0) {
+        completionPct = Math.min(100, projReports.length * 8);
+      }
+    }
+
     return {
       id: proj.id,
       name: proj.name,
       shortName: proj.name.length > 18 ? proj.name.substring(0, 16) + '...' : proj.name,
+      companyName: proj.companyName || projectInfo.companyName || '---',
+      managerName: proj.managerName || projectInfo.managerName || '---',
+      location: proj.location || projectInfo.location || '---',
+      status: proj.status || 'active',
       budget: projBud,
       actualSpent: projActualTotal,
+      equipmentWorkCost: projWorkCost,
+      fuelCost: projDieselCost,
+      maintenanceCost: projMaintCost,
       remaining: projRem,
-      consumptionPct: projPct
+      consumptionPct: projPct,
+      completionPct,
+      reportsCount: projReports.length,
+      itemsCount: items.length
     };
   });
+
+  // Filtered and Sorted Projects for the Interactive Table
+  const filteredSortedProjects = useMemo(() => {
+    let list = [...allProjectsBudgetComparison];
+
+    if (projectSearchQuery.trim()) {
+      const q = projectSearchQuery.toLowerCase();
+      list = list.filter(p => 
+        p.name.toLowerCase().includes(q) || 
+        p.companyName.toLowerCase().includes(q) ||
+        p.managerName.toLowerCase().includes(q) ||
+        p.location.toLowerCase().includes(q)
+      );
+    }
+
+    if (projectStatusFilter === 'active') {
+      list = list.filter(p => p.status === 'active' || !p.status);
+    } else if (projectStatusFilter === 'completed') {
+      list = list.filter(p => p.status === 'completed');
+    } else if (projectStatusFilter === 'overbudget') {
+      list = list.filter(p => p.remaining < 0 || p.consumptionPct > 100);
+    }
+
+    list.sort((a, b) => {
+      let valA: any = a[projectSortField];
+      let valB: any = b[projectSortField];
+      if (typeof valA === 'string') {
+        return projectSortOrder === 'asc' 
+          ? valA.localeCompare(valB, 'ar')
+          : valB.localeCompare(valA, 'ar');
+      } else {
+        return projectSortOrder === 'asc' 
+          ? (valA as number) - (valB as number)
+          : (valB as number) - (valA as number);
+      }
+    });
+
+    return list;
+  }, [allProjectsBudgetComparison, projectSearchQuery, projectStatusFilter, projectSortField, projectSortOrder]);
 
   // Calculate Costs and Operational Metrics Per Project Item (البنود)
   const currentProjectItems = projectInfo.projectItems || [];
@@ -664,9 +763,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">
                 <Building2 className="w-4 h-4" />
                 <span>{projectInfo.location || 'نظام إدارة المشاريع'}</span>
-                {projectInfo.code && (
+                {(projectInfo as any).code && (
                   <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md border border-amber-500/30 font-mono text-[11px]">
-                    {projectInfo.code}
+                    {(projectInfo as any).code}
                   </span>
                 )}
               </div>
@@ -684,10 +783,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button
                 onClick={onOpenShareApp}
                 className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-3 rounded-xl text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
-                title="مشاركة التطبيق بالكامل بكل بياناته وقاعدة بياناته المدمجة"
+                title="مشاركة التطبيق"
               >
                 <Share2 className="w-4.5 h-4.5 text-slate-950" />
-                <span>مشاركة التطبيق بالبيانات</span>
+                <span>مشاركة التطبيق</span>
               </button>
             )}
 
@@ -1271,36 +1370,378 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Multi-Project Budget Comparison Bar Chart */}
+        {/* Multi-Project Budget Comparison Bar Chart & Interactive Table */}
         {allProjectsBudgetComparison.length > 0 && (
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-slate-900 text-sm">مقارنة الميزانيات والتكاليف الفعلية بكافة المشاريع</h4>
-              <span className="text-[11px] text-slate-500 font-semibold">مقارنة شاملة لأسطول المشاريع</span>
+          <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5">
+            {/* Section Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500 text-slate-950 font-black shadow-xs">
+                  <FolderKanban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                    <span>مقارنة التكاليف الفعلية مقابل الميزانية ونسبة الإنجاز للمشاريع</span>
+                    <span className="text-xs bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
+                      {filteredSortedProjects.length} مشروع
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    جدول تفاعلي وشامل لمقارنة ميزانيات المشاريع، الانحرافات المالية، والعرض المرئي لنسبة الإنجاز واستهلاك الميزانية
+                  </p>
+                </div>
+              </div>
+
+              {/* Filters & Search Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search Bar */}
+                <div className="relative min-w-48">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={projectSearchQuery}
+                    onChange={(e) => setProjectSearchQuery(e.target.value)}
+                    placeholder="بحث باسم المشروع أو الشركة..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-9 pl-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                {/* Status Filter Buttons */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setProjectStatusFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      projectStatusFilter === 'all' 
+                        ? 'bg-amber-500 text-slate-950 shadow-xs font-black' 
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    الكل
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProjectStatusFilter('active')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      projectStatusFilter === 'active' 
+                        ? 'bg-amber-500 text-slate-950 shadow-xs font-black' 
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    النشطة
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProjectStatusFilter('overbudget')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      projectStatusFilter === 'overbudget' 
+                        ? 'bg-rose-600 text-white shadow-xs font-black' 
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    متجاوزة الميزانية
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="h-64 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-200">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={allProjectsBudgetComparison} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="shortName" tick={{ fontSize: 11, fontWeight: 700, fill: '#475569' }} interval={0} />
-                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `${val / 1000} ألف`} />
-                  <Tooltip 
-                    formatter={(value: number, name: string) => [
-                      formatCurr(value), 
-                      name === 'budget' ? 'الميزانية المرصودة' : 'التكاليف الفعلية'
-                    ]}
-                    labelFormatter={(label, items) => {
-                      const item = items[0]?.payload;
-                      return item ? `${item.name}` : label;
-                    }}
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Legend formatter={(val) => <span className="text-xs font-bold text-slate-700">{val === 'budget' ? 'الميزانية المرصودة' : 'التكاليف التشغيلية الفعلية'}</span>} />
-                  <Bar dataKey="budget" name="budget" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={28} />
-                  <Bar dataKey="actualSpent" name="actualSpent" fill="#0284c7" radius={[6, 6, 0, 0]} barSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Recharts Bar Chart Visualization */}
+            <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-amber-500" />
+                  <span>الرسم البياني المقارن: الميزانية المرصودة vs التكاليف الفعلية</span>
+                </span>
+                <span className="text-[11px] text-slate-500">إجمالي {allProjectsBudgetComparison.length} مشاريع</span>
+              </div>
+              <div className="h-56 w-full pt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={allProjectsBudgetComparison} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="shortName" tick={{ fontSize: 11, fontWeight: 700, fill: '#475569' }} interval={0} />
+                    <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `${val / 1000} ألف`} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        formatCurr(value), 
+                        name === 'budget' ? 'الميزانية المرصودة' : 'التكاليف الفعلية'
+                      ]}
+                      labelFormatter={(label, items) => {
+                        const item = items[0]?.payload;
+                        return item ? `${item.name}` : label;
+                      }}
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                    />
+                    <Legend formatter={(val) => <span className="text-xs font-bold text-slate-700">{val === 'budget' ? 'الميزانية المرصودة' : 'التكاليف التشغيلية الفعلية'}</span>} />
+                    <Bar dataKey="budget" name="budget" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={28} />
+                    <Bar dataKey="actualSpent" name="actualSpent" fill="#0284c7" radius={[6, 6, 0, 0]} barSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Interactive Data Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-900 text-slate-200 font-extrabold select-none">
+                  <tr>
+                    {/* Sortable Headers */}
+                    <th className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'name') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('name');
+                            setProjectSortOrder('asc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>اسم المشروع والجهة</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'budget') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('budget');
+                            setProjectSortOrder('desc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>الميزانية المرصودة</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'actualSpent') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('actualSpent');
+                            setProjectSortOrder('desc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>التكاليف الفعلية</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'remaining') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('remaining');
+                            setProjectSortOrder('asc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>الفارق / المتبقي</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'consumptionPct') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('consumptionPct');
+                            setProjectSortOrder('desc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>استهلاك الميزانية</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5 min-w-44">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (projectSortField === 'completionPct') {
+                            setProjectSortOrder(projectSortOrder === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setProjectSortField('completionPct');
+                            setProjectSortOrder('desc');
+                          }
+                        }}
+                        className="flex items-center gap-1 hover:text-amber-400 cursor-pointer"
+                      >
+                        <span>نسبة الإنجاز الفعلي (عرض مرئي)</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </th>
+
+                    <th className="p-3.5 text-center">التفاصيل</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-200 font-bold text-slate-800 bg-white">
+                  {filteredSortedProjects.length > 0 ? (
+                    filteredSortedProjects.map((p) => {
+                      const isExpanded = expandedProjectId === p.id;
+                      const isOverBudget = p.remaining < 0 || p.consumptionPct > 100;
+                      const isWarningBudget = !isOverBudget && p.consumptionPct >= 85;
+
+                      return (
+                        <React.Fragment key={p.id}>
+                          <tr className={`hover:bg-amber-50/50 transition-colors ${
+                            isExpanded ? 'bg-amber-50/80 border-r-4 border-r-amber-500' : ''
+                          }`}>
+                            {/* Project Name & Meta */}
+                            <td className="p-3.5">
+                              <div>
+                                <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                                  <span>{p.name}</span>
+                                  <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
+                                    p.status === 'completed' 
+                                      ? 'bg-emerald-100 text-emerald-800' 
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {p.status === 'completed' ? 'مكتمل' : 'نشط'}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 font-normal">
+                                  <span className="flex items-center gap-0.5">
+                                    <Building2 className="w-3 h-3 text-slate-400" />
+                                    <span>{p.companyName}</span>
+                                  </span>
+                                  <span>•</span>
+                                  <span>{p.managerName}</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Budget */}
+                            <td className="p-3.5 font-mono text-slate-900 font-black">
+                              {formatCurr(p.budget)}
+                            </td>
+
+                            {/* Actual Spent */}
+                            <td className="p-3.5 font-mono text-slate-900 font-black">
+                              {formatCurr(p.actualSpent)}
+                            </td>
+
+                            {/* Remaining Variance */}
+                            <td className="p-3.5 font-mono font-black">
+                              <span className={p.remaining >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                                {p.remaining < 0 && '- '}
+                                {formatCurr(Math.abs(p.remaining))}
+                              </span>
+                            </td>
+
+                            {/* Budget Consumption Pct */}
+                            <td className="p-3.5">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black font-mono ${
+                                isOverBudget 
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200' 
+                                  : isWarningBudget 
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-200' 
+                                  : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                              }`}>
+                                {p.consumptionPct}%
+                                {isOverBudget && <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                              </span>
+                            </td>
+
+                            {/* Visual Progress Rate (عرض مرئي لنسبة الإنجاز) */}
+                            <td className="p-3.5 min-w-44">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px] font-extrabold">
+                                  <span className="text-slate-700">نسبة الإنجاز:</span>
+                                  <span className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                    {p.completionPct}%
+                                  </span>
+                                </div>
+
+                                {/* Modern Visual Progress Bar */}
+                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${
+                                      p.completionPct >= 100 
+                                        ? 'from-emerald-500 to-emerald-600' 
+                                        : p.completionPct >= 60 
+                                        ? 'from-indigo-500 to-blue-600' 
+                                        : 'from-amber-500 to-amber-600'
+                                    }`}
+                                    style={{ width: `${Math.min(100, p.completionPct)}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Expand Row Button */}
+                            <td className="p-3.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedProjectId(isExpanded ? null : p.id)}
+                                className="p-1.5 hover:bg-amber-200/60 rounded-lg transition-colors text-slate-600 cursor-pointer"
+                                title="عرض تفاصيل تكاليف المشروع"
+                              >
+                                {isExpanded ? <ChevronUp className="w-4 h-4 text-amber-700" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Detail Panel */}
+                          {isExpanded && (
+                            <tr className="bg-amber-50/30">
+                              <td colSpan={7} className="p-4 border-t border-amber-200/60">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">تكلفة عمل المعدات والعمالة:</span>
+                                    <strong className="text-sm font-mono text-indigo-900 block">{formatCurr(p.equipmentWorkCost)}</strong>
+                                    <span className="text-[10px] text-slate-400 block">من واقع تقارير العمل المنجزة</span>
+                                  </div>
+
+                                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">تكلفة وقود الديزل المصروف:</span>
+                                    <strong className="text-sm font-mono text-amber-900 block">{formatCurr(p.fuelCost)}</strong>
+                                    <span className="text-[10px] text-slate-400 block">مسجلة بسندات الصرف والوقود</span>
+                                  </div>
+
+                                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
+                                    <span className="text-[11px] font-bold text-slate-500 block">تكلفة الصيانة والقطع والزيوت:</span>
+                                    <strong className="text-sm font-mono text-rose-900 block">{formatCurr(p.maintenanceCost)}</strong>
+                                    <span className="text-[10px] text-slate-400 block">مصاريف قطع الغيار والصيانة</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-slate-500 font-bold">
+                        لا توجد مشاريع مطابقة لمعايير البحث الحالية
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

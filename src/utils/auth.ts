@@ -1,13 +1,41 @@
 // Multi-User Authentication & Account Management Helper
+
+export interface UserPermissions {
+  canAddReports?: boolean;
+  canDeleteReports?: boolean;
+  canManageEquipment?: boolean;
+  canManageCompanies?: boolean;
+  canManageDiesel?: boolean;
+  canIssueInvoicing?: boolean;
+  canManageDrivers?: boolean;
+  canManageUsers?: boolean;
+  canExportData?: boolean;
+}
+
+export const DEFAULT_FULL_PERMISSIONS: UserPermissions = {
+  canAddReports: true,
+  canDeleteReports: true,
+  canManageEquipment: true,
+  canManageCompanies: true,
+  canManageDiesel: true,
+  canIssueInvoicing: true,
+  canManageDrivers: true,
+  canManageUsers: true,
+  canExportData: true,
+};
+
 export interface UserAccount {
   id: string;
   email: string;
   username: string;
   name: string;
   passwordHash: string;
-  role: 'admin' | 'project_manager' | 'site_engineer' | 'viewer';
-  assignedProjectIds: string[]; // List of project IDs this user is authorized to access
+  role: 'primary_admin' | 'admin' | 'project_manager' | 'site_engineer' | 'accountant' | 'viewer';
+  isPrimaryUser?: boolean; // هل المستخدم مستخدم رئيسي (مالك حساب/مشروع)؟
+  createdByUserId?: string; // معرّف المستخدم الرئيسي الذي أنشأ هذا الحساب الفرعي
+  assignedProjectIds: string[]; // قائمة معرّفات المشاريع المصرح له بالدخول إليها
   isAllProjectsAllowed?: boolean;
+  permissions?: UserPermissions; // الصلاحيات التفصيلية الممنوحة للمستخدم
   createdAt: string;
   status?: 'active' | 'suspended';
   phone?: string;
@@ -22,9 +50,11 @@ export const DEFAULT_ADMIN: UserAccount = {
   username: 'Eng. Jehad Meftah',
   name: 'المهندس جهاد مفتاح',
   passwordHash: '770999936**Jehad',
-  role: 'admin',
+  role: 'primary_admin',
+  isPrimaryUser: true,
   assignedProjectIds: [],
   isAllProjectsAllowed: true,
+  permissions: DEFAULT_FULL_PERMISSIONS,
   createdAt: '2026-01-01T00:00:00.000Z',
   status: 'active'
 };
@@ -51,8 +81,10 @@ export const getRegisteredUsers = (): UserAccount[] => {
       // Ensure admin has full permissions
       users[adminIdx] = {
         ...users[adminIdx],
-        role: 'admin',
-        isAllProjectsAllowed: true
+        role: 'primary_admin',
+        isPrimaryUser: true,
+        isAllProjectsAllowed: true,
+        permissions: DEFAULT_FULL_PERMISSIONS
       };
     }
     return users;
@@ -94,9 +126,11 @@ export const registerUserAccount = (
   username: string,
   name: string,
   password: string,
-  role: 'admin' | 'project_manager' | 'site_engineer' | 'viewer' = 'site_engineer',
+  role: 'primary_admin' | 'admin' | 'project_manager' | 'site_engineer' | 'accountant' | 'viewer' = 'primary_admin',
   assignedProjectIds: string[] = [],
-  isAllProjectsAllowed: boolean = false
+  isAllProjectsAllowed: boolean = false,
+  createdByUserId?: string,
+  permissions?: UserPermissions
 ): { success: boolean; user?: UserAccount; message?: string } => {
   const cleanEmail = email.trim().toLowerCase();
   const cleanUsername = username.trim();
@@ -125,15 +159,31 @@ export const registerUserAccount = (
     return { success: false, message: 'اسم المستخدم هذا مستخدم بالفعل! اختر اسماً آخر.' };
   }
 
+  // If created without createdByUserId, it's a new Primary User (Master Admin)
+  const isPrimary = !createdByUserId || role === 'primary_admin';
+
   const newUser: UserAccount = {
     id: `user-${Date.now()}`,
     email: cleanEmail,
     username: cleanUsername,
     name: cleanName,
     passwordHash: password,
-    role,
+    role: isPrimary ? 'primary_admin' : role,
+    isPrimaryUser: isPrimary,
+    createdByUserId: createdByUserId,
     assignedProjectIds: assignedProjectIds || [],
-    isAllProjectsAllowed: isAllProjectsAllowed || role === 'admin',
+    isAllProjectsAllowed: isPrimary ? true : isAllProjectsAllowed,
+    permissions: isPrimary ? DEFAULT_FULL_PERMISSIONS : (permissions || {
+      canAddReports: true,
+      canDeleteReports: false,
+      canManageEquipment: true,
+      canManageCompanies: false,
+      canManageDiesel: true,
+      canIssueInvoicing: false,
+      canManageDrivers: true,
+      canManageUsers: false,
+      canExportData: true
+    }),
     createdAt: new Date().toISOString(),
     status: 'active'
   };
@@ -158,9 +208,14 @@ export const authenticateUserAccount = (
   // Direct check for default hardcoded admin account credentials
   const isAdminUserMatch = 
     cleanInput === 'eng. jehad meftah' || 
+    cleanInput === 'eng.jehad meftah' ||
     cleanInput === 'جهاد' || 
+    cleanInput === 'جهاد مفتاح' ||
+    cleanInput === 'المهندس جهاد' ||
+    cleanInput === 'المهندس جهاد مفتاح' ||
+    cleanInput === 'م. جهاد' ||
     cleanInput === 'jehadyahya3@gmail.com' ||
-    cleanInput === 'eng.jehad meftah';
+    cleanInput.includes('jehad');
 
   const isAdminPassMatch = 
     cleanPass === '770999936**Jehad' || 
@@ -194,7 +249,17 @@ export const authenticateUserAccount = (
 export const getUserByUsernameOrEmail = (identifier: string): UserAccount | null => {
   if (!identifier) return null;
   const clean = identifier.trim().toLowerCase();
-  if (clean === 'eng. jehad meftah' || clean === 'جهاد' || clean === 'jehadyahya3@gmail.com') {
+  if (
+    clean === 'eng. jehad meftah' || 
+    clean === 'eng.jehad meftah' ||
+    clean === 'جهاد' || 
+    clean === 'جهاد مفتاح' ||
+    clean === 'المهندس جهاد' ||
+    clean === 'المهندس جهاد مفتاح' ||
+    clean === 'م. جهاد' ||
+    clean === 'jehadyahya3@gmail.com' ||
+    clean.includes('jehad')
+  ) {
     return DEFAULT_ADMIN;
   }
   const users = getRegisteredUsers();
@@ -203,7 +268,28 @@ export const getUserByUsernameOrEmail = (identifier: string): UserAccount | null
 
 // Compute safe storage key for per-account data isolation
 export const getUserStorageKey = (userKey: string, dataTypeKey: string): string => {
-  const safeId = encodeURIComponent((userKey || 'default').toLowerCase().trim());
-  return `eq_user_${safeId}_${dataTypeKey}`;
+  if (!userKey) {
+    return `eq_user_default_${dataTypeKey}`;
+  }
+  const cleanKey = userKey.trim().toLowerCase();
+  
+  try {
+    const users = getRegisteredUsers();
+    const matchedUser = users.find(u => u.email.toLowerCase() === cleanKey || u.username.toLowerCase() === cleanKey);
+    
+    let ownerKey = cleanKey;
+    if (matchedUser && !matchedUser.isPrimaryUser && matchedUser.createdByUserId) {
+      const parent = users.find(u => u.id === matchedUser.createdByUserId);
+      if (parent) {
+        ownerKey = (parent.username || parent.email || parent.id).toLowerCase().trim();
+      }
+    }
+
+    const safeId = encodeURIComponent(ownerKey);
+    return `eq_user_${safeId}_${dataTypeKey}`;
+  } catch (err) {
+    const safeId = encodeURIComponent(cleanKey);
+    return `eq_user_${safeId}_${dataTypeKey}`;
+  }
 };
 

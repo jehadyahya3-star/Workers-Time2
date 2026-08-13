@@ -8,8 +8,16 @@ import {
   getDocs, 
   onSnapshot, 
   writeBatch,
-  enableMultiTabIndexedDbPersistence
+  enableMultiTabIndexedDbPersistence,
+  setLogLevel
 } from 'firebase/firestore';
+
+// Silence non-fatal connection timeout logs in offline mode or slow network
+try {
+  setLogLevel('error');
+} catch (e) {
+  // ignore
+}
 import { 
   getAuth, 
   GoogleAuthProvider, 
